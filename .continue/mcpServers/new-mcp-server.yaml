@@ -1,0 +1,7 @@
+name: My MCP server
+version: 0.0.2
+schema: v1
+mcpServers:
+  - name: My MCP server
+    type: streamable-http
+    url: http://127.0.0.1:7000/mcp
