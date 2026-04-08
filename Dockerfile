@@ -4,8 +4,7 @@ FROM python:3.12-slim
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=off \
-    # Point Python to the global venv instead of the local .venv
+    VIRTUAL_ENV=/opt/mcp_venv \
     PATH="/opt/mcp_venv/bin:/root/.local/bin:${PATH}"
 
 # Install system dependencies and Node.js
@@ -19,21 +18,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
-
 # Install uv
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Copy project files to a temporary location to install dependencies
-COPY pyproject.toml . 
+# Create the virtual environment
+RUN uv venv /opt/mcp_venv
 
-# Install dependencies into a global location /opt/mcp_venv 
-# instead of the local /app/.venv
-RUN uv venv /opt/mcp_venv && \
-    uv pip install --python /opt/mcp_venv/bin/python -r pyproject.toml
+# Copy the dependency file to leverage Docker layer caching
+COPY pyproject.toml /tmp/pyproject.toml
 
-# Expose the port used by the aggregator server
-EXPOSE 7000
+# Install dependencies from the toml file into the global venv
+RUN uv pip install --python /opt/mcp_venv/bin/python -r /tmp/pyproject.toml
 
-# Use the global venv to run the server
+WORKDIR /app
+
+# Run the server using the absolute path to the baked-in venv.
 CMD ["/opt/mcp_venv/bin/python", "server.py"]

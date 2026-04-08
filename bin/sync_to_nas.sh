@@ -27,7 +27,7 @@ fi
 # Use rsync with modified flags for NFS:
 # -rlD: replaces -a (archive) but omits -t (times), -o (owner), and -g (group)
 # --no-perms: avoid trying to set permissions that the NFS share might reject
-rsync -rlD --no-perms --verbose --delete \
+rsync -rlptD --no-owner --no-group --no-perms --verbose --delete \
     --exclude='.*' \
     --exclude='**/__pycache__/' \
     --exclude='tmp/' \
