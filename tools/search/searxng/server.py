@@ -128,35 +128,65 @@ TIME_RANGES = ["day", "week", "month", "year"]
 )
 async def search(
     query: str,
-    engines: Optional[List[str]] = None,
+    my_search_engines: Optional[List[str]] = None,
     time_range: Optional[str] = None,
-    limit: int = 30,
-    lang: str = "en-CA"
+    limit: int = 30
 ) -> dict:
     """
     Perform a search using SearXNG.
+
+    CRITICAL DEPENDENCY: To get accurate, time-sensitive data, you MUST FIRST call 
+    'web_searxng_list_engines' to identify which my_search_engines are available and which
+    ones support 'time_range'.
     
+    If you provide a 'time_range' without specifying 'my_search_engines', this tool 
+    will return an error because general defaults often ignore time filters.
+
     Args:
         query: The search query.
-        engines: List of specific engines to use. If omitted, SearXNG uses defaults.
-                 Check 'search/searxng/list-available-engines' to see which engine fits your needs.
+        my_search_engines: List of specific engines to use. (REQUIRED if time_range is used).
+                           Obtain the valid list of engines and their capabilities 
+                           by calling the 'web_searxng_list_engines' tool.
         time_range: Filter results by time (day, week, month, year). 
-                    Only works for: brave, duckduckgo, bing, reddit, arxiv, google news.
-                    IMPORTANT: If you include engines that do NOT support time_range 
-                    while providing a time_range parameter, those engines will likely 
-                    return zero results. If you need both fresh results and authoritative 
-                    evergreen results, perform two separate search calls.
+                    Only works for engines where 'supports_time_range' is True.
         limit: Max number of results to return.
-        lang: Language code (default: en-CA).
     """
+    # 1. Validate time_range value
+    if time_range and time_range not in TIME_RANGES:
+        return {"error": f"Invalid time_range. Must be one of: {', '.join(TIME_RANGES)}"}
+
+    # 2. Enforce engine specification when using time_range
+    if time_range and not my_search_engines:
+        return {
+            "error": "Missing search engines for time-sensitive search.",
+            "instruction": "You provided a time_range but no specific engines. General searches often ignore time filters. Please call 'web_searxng_list_engines' to find engines that support time filtering (e.g., 'google news', 'bing') and provide them in the 'my_search_engines' parameter."
+        }
+
+    # 3. Validate and filter engines
+    if my_search_engines:
+        valid_engines = []
+        for eng in my_search_engines:
+            if eng not in ENGINES:
+                return {"error": f"Unknown engine: {eng}. Call 'web_searxng_list_engines' for a valid list."}
+            
+            # If time_range is set, filter out engines that don't support it
+            if time_range and not ENGINES[eng]["time_range_support"]:
+                continue # Skip engines that don't support time_range
+            
+            valid_engines.append(eng)
+        
+        if not valid_engines:
+            return {"error": "None of the provided engines support the requested time_range."}
+        
+        my_search_engines = valid_engines
+
     params = {
         "q": query,
         "format": "json",
-        "language": lang,
     }
     
-    if engines:
-        params["engines"] = ",".join(engines)
+    if my_search_engines:
+        params["engines"] = ",".join(my_search_engines)
     
     if time_range:
         params["time_range"] = time_range
@@ -167,7 +197,6 @@ async def search(
             response.raise_for_status()
             data = response.json()
             
-            # Reorder results by score descending
             results = data.get("results", [])
             sorted_results = sorted(
                 results, 
