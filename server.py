@@ -1,15 +1,11 @@
+import logging
 import os
 
 from fastmcp import FastMCP
+from fastmcp.utilities.logging import get_logger
+from fastmcp.server.providers.filesystem import FileSystemProvider
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
-
-from timeserver.server import mcp as time_mcp
-from weather.server import mcp as weather_mcp
-from searxng.server import mcp as searxng_mcp
-import logging
-from fastmcp.utilities.logging import get_logger
-
 
 os.environ["DANGEROUSLY_OMIT_AUTH"] = "true"
 
@@ -17,14 +13,29 @@ to_client_logger = get_logger(name="fastmcp.server.context.to_client")
 to_client_logger.setLevel(level=logging.DEBUG)
 
 # Create the main MCP server
-mcp = FastMCP(name="Data Server", instructions="""
-  This server provides useful tools to get additional information
-""")
-
+# mcp = FastMCP(name="Data Server", instructions="""
+#   This server provides useful tools to get additional information such as time, web search
+# """)
+# remote_proxy = create_proxy(
+#     "http://localhost:7100/mcp",
+#     name="Searxng web search"
+# )
+#
+# @mcp.tool()
+# def run_tool_a(input: str) -> str:
+#     result = subprocess.run(
+#         ["/envs/tool_a/bin/python", "tool_a_runner.py", input],
+#         capture_output=True
+#     )
+#     return result.stdout.decode()
 # # Mount the sub-servers
-mcp.mount(time_mcp)
-mcp.mount(weather_mcp)
-mcp.mount(searxng_mcp)
+# mcp.mount(time_mcp, namespace = "timeserver")
+# mcp.mount(remote_proxy, namespace = "Web_Search_MCP_server")
+# mcp.mount(weather_mcp)
+# mcp.mount(searxng_mcp)
+
+mcp = FastMCP("my-server")
+mcp.add_provider(FileSystemProvider("./tools", reload=True))
 
 # Configure CORS for browser-based clients
 middleware = [

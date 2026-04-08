@@ -15,7 +15,7 @@ def time() -> str:
     logging.info("time resource accessed")
     return datetime.now().isoformat()
 
-@mcp.tool()
+@mcp.tool(name="utils/time")
 def time() -> str:
     """
     The current local time in ISO format.
