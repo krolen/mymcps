@@ -34,6 +34,7 @@ rsync -rlptD --no-owner --no-group --no-perms --verbose --delete \
     ${GITIGNORE_EXCLUDES} \
     --include='mcp-remote.iml' \
     --exclude='*.iml' \
+    --exclude='*.log' \
     --exclude="bin/" \
     --exclude="push_to_hub.sh" \
     --exclude="sync_to_nas.sh" \
