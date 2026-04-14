@@ -19,6 +19,30 @@ CRAWL4AI_SERVER_URL = "http://192.168.0.188:11235"
 # Semaphore to limit parallel requests to 10
 CRAWL_SEMAPHORE = asyncio.Semaphore(10)
 
+
+# Result utility functions
+def is_success(result) -> bool:
+    """Check if a crawl result indicates success."""
+    return getattr(result, 'success', False)
+
+
+def get_error(result, default: str = "Unknown error") -> str:
+    """Extract error message from a crawl result."""
+    return getattr(result, 'error', default)
+
+
+def get_markdown_content(result) -> str:
+    """Extract markdown content from a crawl result, preferring fit_markdown."""
+    if hasattr(result, 'markdown') and hasattr(result.markdown, 'fit_markdown'):
+        return result.markdown.fit_markdown
+    return getattr(result, 'markdown', 'No markdown content available')
+
+
+def get_html_content(result) -> str:
+    """Extract HTML content from a crawl result."""
+    return getattr(result, 'html', 'No HTML content available')
+
+
 @asynccontextmanager
 async def lifespan(app):
     async with Crawl4aiDockerClient(base_url=CRAWL4AI_SERVER_URL) as client:
@@ -27,13 +51,15 @@ async def lifespan(app):
 
 mcp = FastMCP(name="crawl4ai-crawler", lifespan=lifespan)
 
+
 # Target server configuration
 def get_domain_config(url: str) -> dict:
     """Extracts domain-specific configuration overrides for a given URL."""
-    domain = urlparse(url).netloc
-    for d in DOMAIN_CONFIGS:
-        if d in domain:
-            return DOMAIN_CONFIGS[d]
+    domain = urlparse(url).netloc.lower()
+    for config_domain, config in DOMAIN_CONFIGS.items():
+        # Check for exact match or subdomain match
+        if domain == config_domain or domain.endswith('.' + config_domain):
+            return config
     return {}
 
 
@@ -45,14 +71,12 @@ def get_browser_config(url: str = "") -> BrowserConfig:
     viewport = browser_settings.get("viewport", {})
 
     # Dynamic randomization per request
-    actual_viewport_width = random.choice([1280, 1366, 1440, 1920]) if not viewport.get("width") else viewport.get(
-        "width")
-    actual_viewport_height = random.choice([720, 768, 900, 1080]) if not viewport.get("height") else viewport.get(
-        "height")
-    actual_user_agent = random.choice([
+    actual_viewport_width = viewport.get("width") or random.choice([1280, 1366, 1440, 1920])
+    actual_viewport_height = viewport.get("height") or random.choice([720, 768, 900, 1080])
+    actual_user_agent = browser_settings.get("user_agent") or random.choice([
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36",
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/121.0.0.0 Safari/537.36",
-    ]) if not browser_settings.get("user_agent") else browser_settings.get("user_agent")
+    ])
 
     return BrowserConfig(
         headless=browser_settings.get("headless", True),
@@ -71,8 +95,7 @@ def get_run_config(url: str = "") -> CrawlerRunConfig:
     crawl_settings = merged_config.get("crawl", {})
 
     # Dynamic randomization per request
-    actual_delay = random.uniform(2.0, 5.0) if crawl_settings.get(
-        "delay_before_return_html") is None else crawl_settings.get("delay_before_return_html")
+    actual_delay = crawl_settings.get("delay_before_return_html") or random.uniform(2.0, 5.0)
 
     # 1. Create your filter
     prune_filter = PruningContentFilter(
@@ -90,6 +113,20 @@ def get_run_config(url: str = "") -> CrawlerRunConfig:
         timezone_id=crawl_settings.get("timezone_id"),
         markdown_generator=md_generator,
     )
+
+
+# Define result classes outside the function to avoid recreation
+class TimeoutResult:
+    success = False
+    error = "Request timed out after 60 seconds"
+
+
+class ErrorResult:
+    success = False
+    error = ""  # Will be set in constructor
+
+    def __init__(self, error_msg):
+        self.error = error_msg
 
 
 async def _crawl_single_url(client: Crawl4aiDockerClient, url: str):
@@ -110,49 +147,44 @@ async def _crawl_single_url(client: Crawl4aiDockerClient, url: str):
                 )
                 return result
             except asyncio.TimeoutError:
-                class TimeoutResult:
-                    success = False
-                    error = "Request timed out after 60 seconds"
-
                 return TimeoutResult()
             except Exception as e:
-                class ErrorResult:
-                    success = False
-                    error = str(e)
-
-                return ErrorResult()
+                return ErrorResult(str(e))
 
 
-@mcp.tool()
+@mcp.tool(
+    name="web_crawl_url"
+)
 async def crawl_url(ctx: Context, url: str, extract_markdown: bool = True) -> str:
     """
     Crawl a URL and extract its content using stealth configurations.
 
     Args:
+        ctx: The MCP context.
         url: The URL to crawl.
         extract_markdown: Whether to return the content as markdown. Defaults to True.
     """
     client = ctx.request_context.lifespan_context["client"]
     result = await _crawl_single_url(client, url)
 
-    if not result.success:
-        return f"Error crawling {url}: {getattr(result, 'error', 'Unknown error')}"
+    if not is_success(result):
+        return f"Error crawling {url}: {get_error(result)}"
 
     if extract_markdown:
-        # Try to return fit_markdown for a cleaner result, fallback to raw markdown
-        if hasattr(result, 'markdown') and hasattr(result.markdown, 'fit_markdown'):
-            return result.markdown.fit_markdown
-        return getattr(result, 'markdown', 'No markdown content available')
+        return get_markdown_content(result)
     else:
-        return getattr(result, 'html', 'No HTML content available')
+        return get_html_content(result)
 
 
-@mcp.tool()
+@mcp.tool(
+    name="web_crawl_multiple_urls"
+)
 async def crawl_multiple_urls(ctx: Context, urls: list[str]) -> dict[str, str]:
     """
     Crawl multiple URLs in parallel (respecting the global concurrency limit).
 
     Args:
+        ctx: The MCP context.
         urls: A list of URLs to crawl.
     """
     client = ctx.request_context.lifespan_context["client"]
@@ -162,14 +194,10 @@ async def crawl_multiple_urls(ctx: Context, urls: list[str]) -> dict[str, str]:
 
     output = {}
     for url, result in zip(urls, results):
-        if result.success:
-            # Try to return fit_markdown for a cleaner result, fallback to raw markdown
-            if hasattr(result, 'markdown') and hasattr(result.markdown, 'fit_markdown'):
-                output[url] = result.markdown.fit_markdown
-            else:
-                output[url] = getattr(result, 'markdown', 'No markdown content available')
+        if is_success(result):
+            output[url] = get_markdown_content(result)
         else:
-            output[url] = f"Error: {getattr(result, 'error', 'Unknown error')}"
+            output[url] = f"Error: {get_error(result)}"
 
     return output
 
@@ -251,6 +279,7 @@ def deep_merge(base, override):
 
     return result
 
+
 if __name__ == "__main__":
     async def run_test():
         test_url = "https://www.google.com/search?q=toronto+news&tbs=qdr:d"
@@ -260,17 +289,18 @@ if __name__ == "__main__":
             async with Crawl4aiDockerClient(base_url=CRAWL4AI_SERVER_URL) as client:
                 result = await _crawl_single_url(client, test_url)
 
-                if result.success:
+                if is_success(result):
                     print("SUCCESS!")
                     print("\n--- Full Response ---\n")
                     if hasattr(result, 'markdown') and hasattr(result.markdown, 'fit_markdown'):
                         print(result.markdown.fit_markdown)
                     else:
-                        print(getattr(result, 'markdown', 'No markdown content available'))
+                        print(get_markdown_content(result))
                     print("\n--- End of Response ---")
                 else:
-                    print(f"FAILED: {getattr(result, 'error', 'Unknown error')}")
+                    print(f"FAILED: {get_error(result)}")
         except Exception as e:
             print(f"Unexpected Error: {e}")
+
 
     asyncio.run(run_test())
