@@ -1,11 +1,14 @@
 import logging
 import os
+from contextlib import asynccontextmanager
 
+from crawl4ai import Crawl4aiDockerClient
 from fastmcp import FastMCP
 from fastmcp.utilities.logging import get_logger
 from fastmcp.server.providers.filesystem import FileSystemProvider
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
+from tools.crawler.crawl4ai.server import lifespan as crawl_lifespan
 
 os.environ["DANGEROUSLY_OMIT_AUTH"] = "true"
 
@@ -34,7 +37,12 @@ to_client_logger.setLevel(level=logging.DEBUG)
 # mcp.mount(weather_mcp)
 # mcp.mount(searxng_mcp)
 
-mcp = FastMCP("my-server")
+@asynccontextmanager
+async def lifespan(app: FastMCP):
+    async with crawl_lifespan(app) as crawl_state:
+        yield {**crawl_state}
+
+mcp = FastMCP(name="my-server", lifespan=lifespan)
 mcp.add_provider(FileSystemProvider("./tools", reload=True))
 
 # Configure CORS for browser-based clients

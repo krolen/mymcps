@@ -44,10 +44,12 @@ def get_html_content(result) -> str:
 
 
 @asynccontextmanager
-async def lifespan(app):
+async def lifespan(app: FastMCP):
+    print("LIFESPAN STARTING")
     async with Crawl4aiDockerClient(base_url=CRAWL4AI_SERVER_URL) as client:
+        print("CLIENT READY:", client)
         yield {"client": client}
-
+    print("LIFESPAN SHUTDOWN")
 
 mcp = FastMCP(name="crawl4ai-crawler", lifespan=lifespan)
 
@@ -135,21 +137,20 @@ async def _crawl_single_url(client: Crawl4aiDockerClient, url: str):
     Returns the result object on success, or a mock result with success=False on failure.
     """
     async with CRAWL_SEMAPHORE:
-        async with client:
-            try:
-                result = await asyncio.wait_for(
-                    client.crawl(
-                        urls=[url],
-                        browser_config=get_browser_config(url),
-                        crawler_config=get_run_config(url)
-                    ),
-                    timeout=60
-                )
-                return result
-            except asyncio.TimeoutError:
-                return TimeoutResult()
-            except Exception as e:
-                return ErrorResult(str(e))
+        try:
+            result = await asyncio.wait_for(
+                client.crawl(
+                    urls=[url],
+                    browser_config=get_browser_config(url),
+                    crawler_config=get_run_config(url)
+                ),
+                timeout=60
+            )
+            return result
+        except asyncio.TimeoutError:
+            return TimeoutResult()
+        except Exception as e:
+            return ErrorResult(str(e))
 
 
 @mcp.tool(
@@ -164,7 +165,11 @@ async def crawl_url(ctx: Context, url: str, extract_markdown: bool = True) -> st
         url: The URL to crawl.
         extract_markdown: Whether to return the content as markdown. Defaults to True.
     """
-    client = ctx.request_context.lifespan_context["client"]
+    print("CTX ATTRS:", dir(ctx))
+    print("LIFESPAN:", getattr(ctx, 'lifespan_context', 'NOT FOUND'))
+    print("STATE:", getattr(ctx, 'state', 'NOT FOUND'))
+
+    client = ctx.lifespan_context["client"]
     result = await _crawl_single_url(client, url)
 
     if not is_success(result):
@@ -187,7 +192,7 @@ async def crawl_multiple_urls(ctx: Context, urls: list[str]) -> dict[str, str]:
         ctx: The MCP context.
         urls: A list of URLs to crawl.
     """
-    client = ctx.request_context.lifespan_context["client"]
+    client = ctx.lifespan_context["client"]
 
     tasks = [_crawl_single_url(client, url) for url in urls]
     results = await asyncio.gather(*tasks)
