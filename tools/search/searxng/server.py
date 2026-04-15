@@ -5,14 +5,27 @@ A FastMCP 3+ based MCP server that provides search functionality using SearXNG.
 Connects to a local SearXNG instance at http://192.168.0.100:8089
 """
 
-import httpx
 from typing import Optional, List
+
+import httpx
 from fastmcp import FastMCP
+from pydantic import BaseModel
+
+from tools.search.modules.ddg import engine as ddg_engine
 
 # Initialize FastMCP server
 mcp = FastMCP(
     name="searxng-search"
 )
+
+
+class SearchResult(BaseModel):
+    title: str
+    url: str
+    content: str
+    score: float = 1.0
+    engine: str
+
 
 # SearXNG server configuration
 SEARXNG_URL = "http://192.168.0.100:8089"
@@ -123,14 +136,15 @@ ENGINES = {
 
 TIME_RANGES = ["day", "week", "month", "year"]
 
+
 @mcp.tool(
     name="web_searxng_search"
 )
 async def search(
-    query: str,
-    my_search_engines: Optional[List[str]] = None,
-    time_range: Optional[str] = None,
-    limit: int = 30
+        query: str,
+        my_search_engines: List[str],
+        time_range: Optional[str] = None,
+        limit: int = 30
 ) -> dict:
     """
     Perform a search using SearXNG.
@@ -168,26 +182,34 @@ async def search(
         for eng in my_search_engines:
             if eng not in ENGINES:
                 return {"error": f"Unknown engine: {eng}. Call 'web_searxng_list_engines' for a valid list."}
-            
+
             # If time_range is set, filter out engines that don't support it
             if time_range and not ENGINES[eng]["time_range_support"]:
-                continue # Skip engines that don't support time_range
-            
+                continue  # Skip engines that don't support time_range
+
             valid_engines.append(eng)
-        
+
         if not valid_engines:
             return {"error": "None of the provided engines support the requested time_range."}
-        
+
         my_search_engines = valid_engines
+
+    # Handle DuckDuckGo separately if it's requested
+    ddg_results = []
+    if my_search_engines and "duckduckgo" in my_search_engines:
+        # Use our custom DDG module
+        ddg_results = await ddg_engine.search(query=query, time_range=time_range, limit=limit)
+        # Remove duckduckgo from the list to avoid duplicate search via SearXNG
+        my_search_engines = [eng for eng in my_search_engines if eng != "duckduckgo"]
 
     params = {
         "q": query,
         "format": "json",
     }
-    
+
     if my_search_engines:
         params["engines"] = ",".join(my_search_engines)
-    
+
     if time_range:
         params["time_range"] = time_range
 
@@ -196,16 +218,48 @@ async def search(
             response = await client.get(f"{SEARXNG_URL}/search", params=params)
             response.raise_for_status()
             data = response.json()
-            
-            results = data.get("results", [])
+
+            searxng_results = data.get("results", [])
+
+            # Merge with DDG results
+            all_results = []
+            seen_urls = set()
+            for r in searxng_results:
+                url = r.get("url")
+                if url:
+                    all_results.append({
+                        "title": r.get("title"),
+                        "url": url,
+                        "content": r.get("content"),
+                        "score": r.get("score", 0),
+                        "engine": r.get("engine")
+                    })
+                    seen_urls.add(url)
+                else:
+                    continue
+
+            for r in ddg_results:
+                url = r.get("url")
+                if url and url not in seen_urls:
+                    all_results.append({
+                        "title": r.get("title"),
+                        "url": url,
+                        "content": r.get("content"),
+                        "score": r.get("score", 0),
+                        "engine": r.get("engine")
+                    })
+                    seen_urls.add(url)
+                else:
+                    continue
+
             sorted_results = sorted(
-                results, 
-                key=lambda x: x.get("score", 0), 
+                all_results,
+                key=lambda x: x.get("score", 0),
                 reverse=True
             )
-            
+
             final_results = sorted_results[:limit]
-            
+
             return {
                 "query": query,
                 "result_count": len(final_results),
@@ -215,6 +269,7 @@ async def search(
             }
     except Exception as e:
         return {"error": str(e)}
+
 
 @mcp.tool(
     name="web_searxng_list_engines"
@@ -236,6 +291,7 @@ async def list_available_engines() -> dict:
         },
         "supported_time_ranges": TIME_RANGES
     }
+
 
 if __name__ == "__main__":
     mcp.run()

@@ -1,10 +1,12 @@
 import logging
-from fastmcp import FastMCP
 from datetime import datetime
+
+from fastmcp import FastMCP
 
 logging.basicConfig(level=logging.INFO)
 
 mcp = FastMCP("Time Server")
+
 
 @mcp.resource(uri="resource://time")  # Added uri parameter
 def time() -> str:
@@ -14,6 +16,7 @@ def time() -> str:
     """
     logging.info("time resource accessed")
     return datetime.now().isoformat()
+
 
 @mcp.tool(name="utils_time")
 def time() -> str:
