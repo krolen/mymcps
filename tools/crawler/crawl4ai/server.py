@@ -9,16 +9,13 @@ import asyncio
 import random
 from contextlib import asynccontextmanager
 from urllib.parse import urlparse
-
+from tools.crawler.constants import CRAWL4AI_SERVER_URL, DEFAULT_CONFIG, DOMAIN_CONFIGS
 from crawl4ai import BrowserConfig, CrawlerRunConfig, PruningContentFilter, DefaultMarkdownGenerator
 from crawl4ai.docker_client import Crawl4aiDockerClient
 from fastmcp import FastMCP, Context
 
 # Import the proxy generator
 
-CRAWL4AI_SERVER_URL = "http://192.168.0.188:11235"
-
-# Semaphore to limit parallel requests to 10
 CRAWL_SEMAPHORE = asyncio.Semaphore(10)
 
 
@@ -95,9 +92,6 @@ def get_browser_config(url: str = "", session_id: str = None) -> BrowserConfig:
         user_data_dir=f"/app/user_data/{session_id}" if session_id else "/app/user_data/default",
         use_persistent_context=True,
         browser_type=browser_settings.get("browser_settings", "chromium"),
-        # browser_mode="builtin",
-        # use_managed_browser=
-        # proxy=[p["server"] for p in get_proxies()],
     )
 
 

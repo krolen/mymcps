@@ -3,6 +3,9 @@ import os
 import re
 import urllib.parse
 from typing import List, Dict, Any, Optional
+from tools.search.constants import SearchConstants as SC
+
+import httpx
 
 import httpx
 
@@ -21,13 +24,7 @@ async def search(query: str, time_range: Optional[str] = None, limit: int = 30) 
         limit: Max number of results to return.
     """
     # Map time_range to DDG df parameter
-    df_map = {
-        "day": "d",
-        "week": "w",
-        "month": "m",
-        "year": "y"
-    }
-    df = df_map.get(time_range, "d") if time_range else ""
+    df = SC.DDG_TIME_RANGE_MAP.get(time_range, "d") if time_range else ""
 
     # Construct DDG HTML URL
     encoded_query = urllib.parse.quote(query)
