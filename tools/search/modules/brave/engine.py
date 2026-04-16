@@ -1,6 +1,5 @@
 import logging
 import os
-import re
 import urllib.parse
 from typing import List, Optional
 from fastmcp import Context
@@ -14,22 +13,23 @@ from tools.common.markdown_utils import (
     clean_markdown_snippet
 )
 
-logger = logging.getLogger("ddg_search")
+logger = logging.getLogger("brave_search")
 
 async def search(ctx: Context, query: str, time_range: Optional[str] = None, limit: int = 30) -> List[SearchResult]:
     """
-    Perform a search using DuckDuckGo via Jina AI proxy.
+    Perform a search using Brave via Jina AI proxy.
 
     Args:
         ctx: The MCP context.
         query: The search query.
-        time_range: Filter results by time (day, week, month and year).
+        time_range: Filter results by time (day, week, month, year).
         limit: Max number of results to return.
     """
-    df = SC.DDG_TIME_RANGE_MAP.get(time_range, "d") if time_range else ""
+    tf = SC.BRAVE_TIME_RANGE_MAP.get(time_range, "d") if time_range else ""
     encoded_query = urllib.parse.quote(query)
-    ddg_url = f"https://html.duckduckgo.com/html/?q={encoded_query}&b=&kl=&df={df}"
-    jina_url = f"https://r.jina.ai/{ddg_url}"
+    # Brave search string: https://search.brave.com/search?q=hello+world&source=desktop&country=ca&lang=en&safesearch=moderate&tf=pw
+    brave_url = f"https://search.brave.com/search?q={encoded_query}&source=desktop&country=ca&lang=en&safesearch=moderate&tf={tf}"
+    jina_url = f"https://r.jina.ai/{brave_url}"
 
     try:
         client = ctx.lifespan_context.get("http_client") or get_client()
@@ -41,7 +41,7 @@ async def search(ctx: Context, query: str, time_range: Optional[str] = None, lim
         content = response.text
 
         if "Warning: This page maybe requiring CAPTCHA" in content or "Warning: Target URL returned error" in content:
-            logger.warning("CAPTCHA detected in Jina AI response for DDG")
+            logger.warning("CAPTCHA detected in Jina AI response for Brave")
             return []
 
         # Parse the markdown content
@@ -69,29 +69,23 @@ async def search(ctx: Context, query: str, time_range: Optional[str] = None, lim
 
                 snippet = part[url_match.end():].strip()
 
-                if "uddg=" not in url or "ad_domain" in url or "ad_type" in url or snippet.startswith("Ad"):
+                # Filter out ads or internal Brave links if they appear in the Jina output
+                if "ad" in url.lower() or snippet.startswith("Ad"):
                     continue
 
-                parsed_url = urllib.parse.urlparse(url)
-                query_params = urllib.parse.parse_qs(parsed_url.query)
-                final_url = query_params.get("uddg", [None])[0]
-
-                if not final_url or not final_url.startswith(('http://', 'https://')) or "duckduckgo.com" in final_url:
+                if url in seen_urls:
                     continue
-
-                if final_url in seen_urls:
-                    continue
-                seen_urls.add(final_url)
+                seen_urls.add(url)
 
                 # Clean up snippet
                 clean_snippet = clean_markdown_snippet(snippet)
 
                 results.append(SearchResult(
                     title=title,
-                    url=final_url,
+                    url=url,
                     content=clean_snippet,
                     score=0.9 - (len(results) * 0.08),
-                    engine="duckduckgo"
+                    engine="brave"
                 ))
             except Exception as e:
                 logger.error(f"Unexpected error parsing individual result: {e}")
@@ -100,5 +94,5 @@ async def search(ctx: Context, query: str, time_range: Optional[str] = None, lim
         return results
 
     except Exception as e:
-        logger.error(f"Error searching DDG via Jina AI: {e}")
+        logger.error(f"Error searching Brave via Jina AI: {e}")
         return []

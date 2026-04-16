@@ -15,6 +15,22 @@ class SearchConstants:
         "year": "y"
     }
 
+    # Brave time range mapping (tf parameter)
+    BRAVE_TIME_RANGE_MAP = {
+        "day": "d",
+        "week": "w",
+        "month": "m",
+        "year": "y"
+    }
+
+    # Brave time range mapping (tf parameter)
+    BRAVE_TIME_RANGE_MAP = {
+        "day": "d",
+        "week": "w",
+        "month": "m",
+        "year": "y"
+    }
+
     # Engine definitions
     ENGINES = {
         "brave": {
