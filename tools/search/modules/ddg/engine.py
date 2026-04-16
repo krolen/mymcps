@@ -3,38 +3,24 @@ import os
 import re
 import urllib.parse
 from typing import List, Dict, Any, Optional
+from fastmcp import Context
 from tools.search.constants import SearchConstants as SC
+from tools.common.http_client import get_client
+from tools.common.markdown_utils import (
+    RESULT_SPLIT_PATTERN,
+    TITLE_PATTERN,
+    URL_PATTERN,
+    clean_markdown_snippet
+)
 
-import httpx
-
-# Configure logging
 logger = logging.getLogger("ddg_search")
 
-# Pre-compiled regex patterns for efficiency
-RESULT_SPLIT_PATTERN = re.compile(r'\n##\s+\[')
-TITLE_PATTERN = re.compile(r'^(.*?)\]')
-URL_PATTERN = re.compile(r'\]\((.*?)\)')
-IMAGE_CLEAN_PATTERN = re.compile(r'\[\!\[Image.*?\]\(.*?\)\].*?(\n|$)', re.MULTILINE)
-PREFIX_URL_PATTERN = re.compile(r'^\[[a-zA-Z0-9./-_\s]+\]\(.*?\)')
-CONTENT_LINK_PATTERN = re.compile(r'\[(.*?)\]\(https?://.*?\)', re.DOTALL)
-MD_LINK_PATTERN = re.compile(r'\[.*?\]\(.*?\)')
-MD_IMAGE_PATTERN = re.compile(r'!\[.*?\]\(.*?\)')
-TIMESTAMP_PATTERN = re.compile(r'\d{4}-\d{2}-\d{2}T.*$')
-
-# Shared HTTP client to avoid repeated TCP/TLS handshakes
-_client: Optional[httpx.AsyncClient] = None
-
-def get_client() -> httpx.AsyncClient:
-    global _client
-    if _client is None or _client.is_closed:
-        _client = httpx.AsyncClient(timeout=30.0, follow_redirects=True)
-    return _client
-
-async def search(query: str, time_range: Optional[str] = None, limit: int = 30) -> List[Dict[str, Any]]:
+async def search(ctx: Context, query: str, time_range: Optional[str] = None, limit: int = 30) -> List[Dict[str, Any]]:
     """
     Perform a search using DuckDuckGo via Jina AI proxy.
 
     Args:
+        ctx: The MCP context.
         query: The search query.
         time_range: Filter results by time (day, week, month, year).
         limit: Max number of results to return.
@@ -45,7 +31,7 @@ async def search(query: str, time_range: Optional[str] = None, limit: int = 30) 
     jina_url = f"https://r.jina.ai/{ddg_url}"
 
     try:
-        client = get_client()
+        client = ctx.lifespan_context.get("http_client") or get_client()
         jina_key = os.getenv("jinaKey")
         headers = {"Authorization": f"Bearer {jina_key}"} if jina_key else {}
 
@@ -93,17 +79,7 @@ async def search(query: str, time_range: Optional[str] = None, limit: int = 30) 
                 seen_urls.add(final_url)
 
                 # Clean up snippet
-                snippet = IMAGE_CLEAN_PATTERN.sub('', snippet).strip()
-                snippet = PREFIX_URL_PATTERN.sub('', snippet).strip()
-
-                content_match = CONTENT_LINK_PATTERN.search(snippet)
-                if content_match:
-                    clean_snippet = content_match.group(1)
-                else:
-                    clean_snippet = MD_LINK_PATTERN.sub('', snippet).strip()
-
-                clean_snippet = MD_IMAGE_PATTERN.sub('', clean_snippet).strip()
-                clean_snippet = TIMESTAMP_PATTERN.sub('', clean_snippet).strip()
+                clean_snippet = clean_markdown_snippet(snippet)
 
                 results.append({
                     "title": title,

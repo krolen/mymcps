@@ -9,6 +9,8 @@ from fastmcp.server.providers.filesystem import FileSystemProvider
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 from tools.crawler.crawl4ai.server import lifespan as crawl_lifespan
+from tools.common.http_client import close_client
+from tools.common.http_client import close_client
 
 os.environ["DANGEROUSLY_OMIT_AUTH"] = "true"
 
@@ -40,7 +42,12 @@ to_client_logger.setLevel(level=logging.DEBUG)
 @asynccontextmanager
 async def lifespan(app: FastMCP):
     async with crawl_lifespan(app) as crawl_state:
-        yield {**crawl_state}
+        from tools.common.http_client import get_client
+        state = {**crawl_state, "http_client": get_client()}
+        try:
+            yield state
+        finally:
+            await close_client()
 
 mcp = FastMCP(name="my-server", lifespan=lifespan)
 mcp.add_provider(FileSystemProvider("./tools", reload=True))

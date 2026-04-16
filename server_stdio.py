@@ -1,6 +1,7 @@
 import os
 
 from fastmcp import FastMCP
+from tools.common.http_client import close_client
 
 from tools.utils.time import mcp as time_mcp
 import logging
@@ -23,5 +24,9 @@ mcp.mount(time_mcp)
 # Run the server
 if __name__ == "__main__":
     print("Starting FastMCP server in stdio mode...")
-    mcp.run()
+    try:
+        mcp.run()
+    finally:
+        import asyncio
+        asyncio.run(close_client())
     print("FastMCP server stopped.")

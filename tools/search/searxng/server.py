@@ -6,8 +6,8 @@ Connects to a local SearXNG instance at http://192.168.0.100:8089
 """
 
 from typing import Optional, List
-import httpx
-from fastmcp import FastMCP
+from tools.common.http_client import get_client
+from fastmcp import FastMCP, Context
 from pydantic import BaseModel
 from tools.search.constants import SearchConstants as SC
 from tools.search.modules.ddg import engine as ddg_engine
@@ -39,6 +39,7 @@ TIME_RANGES = SC.TIME_RANGES
     name="web_searxng_search"
 )
 async def search(
+        ctx: Context,
         query: str,
         my_search_engines: List[str],
         time_range: Optional[str] = None,
@@ -55,6 +56,7 @@ async def search(
     will return an error because general defaults often ignore time filters.
 
     Args:
+        ctx: The MCP context.
         query: The search query.
         my_search_engines: List of specific engines to use. (REQUIRED if time_range is used).
                            Obtain the valid list of engines and their capabilities 
@@ -96,7 +98,7 @@ async def search(
     ddg_results = []
     if my_search_engines and "duckduckgo" in my_search_engines:
         # Use our custom DDG module
-        ddg_results = await ddg_engine.search(query=query, time_range=time_range, limit=limit)
+        ddg_results = await ddg_engine.search(ctx=ctx, query=query, time_range=time_range, limit=limit)
         # Remove duckduckgo from the list to avoid duplicate search via SearXNG
         my_search_engines = [eng for eng in my_search_engines if eng != "duckduckgo"]
 
@@ -112,59 +114,59 @@ async def search(
         params["time_range"] = time_range
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(f"{SEARXNG_URL}/search", params=params)
-            response.raise_for_status()
-            data = response.json()
+        client = ctx.lifespan_context.get("http_client") or get_client()
+        response = await client.get(f"{SEARXNG_URL}/search", params=params)
+        response.raise_for_status()
+        data = response.json()
 
-            searxng_results = data.get("results", [])
+        searxng_results = data.get("results", [])
 
-            # Merge with DDG results
-            all_results = []
-            seen_urls = set()
-            for r in searxng_results:
-                url = r.get("url")
-                if url:
-                    all_results.append({
-                        "title": r.get("title"),
-                        "url": url,
-                        "content": r.get("content"),
-                        "score": r.get("score", 0),
-                        "engine": r.get("engine")
-                    })
-                    seen_urls.add(url)
-                else:
-                    continue
+        # Merge with DDG results
+        all_results = []
+        seen_urls = set()
+        for r in searxng_results:
+            url = r.get("url")
+            if url:
+                all_results.append({
+                    "title": r.get("title"),
+                    "url": url,
+                    "content": r.get("content"),
+                    "score": r.get("score", 0),
+                    "engine": r.get("engine")
+                })
+                seen_urls.add(url)
+            else:
+                continue
 
-            for r in ddg_results:
-                url = r.get("url")
-                if url and url not in seen_urls:
-                    all_results.append({
-                        "title": r.get("title"),
-                        "url": url,
-                        "content": r.get("content"),
-                        "score": r.get("score", 0),
-                        "engine": r.get("engine")
-                    })
-                    seen_urls.add(url)
-                else:
-                    continue
+        for r in ddg_results:
+            url = r.get("url")
+            if url and url not in seen_urls:
+                all_results.append({
+                    "title": r.get("title"),
+                    "url": url,
+                    "content": r.get("content"),
+                    "score": r.get("score", 0),
+                    "engine": r.get("engine")
+                })
+                seen_urls.add(url)
+            else:
+                continue
 
-            sorted_results = sorted(
-                all_results,
-                key=lambda x: x.get("score", 0),
-                reverse=True
-            )
+        sorted_results = sorted(
+            all_results,
+            key=lambda x: x.get("score", 0),
+            reverse=True
+        )
 
-            final_results = sorted_results[:limit]
+        final_results = sorted_results[:limit]
 
-            return {
-                "query": query,
-                "result_count": len(final_results),
-                "results": final_results,
-                "search_time": data.get("search_time"),
-                "engines_used": list(set([r.get("engine") for r in final_results]))
-            }
+        return {
+            "query": query,
+            "result_count": len(final_results),
+            "results": final_results,
+            "search_time": data.get("search_time"),
+            "engines_used": list(set([r.get("engine") for r in final_results]))
+        }
     except Exception as e:
         return {"error": str(e)}
 

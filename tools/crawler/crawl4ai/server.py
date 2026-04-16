@@ -47,7 +47,7 @@ async def lifespan(app: FastMCP):
     print("LIFESPAN STARTING")
     async with Crawl4aiDockerClient(base_url=CRAWL4AI_SERVER_URL) as client:
         print("CLIENT READY:", client)
-        yield {"client": client}
+        yield {"crawl4ai_client": client}
     print("LIFESPAN SHUTDOWN")
 
 
@@ -188,7 +188,7 @@ async def crawl_url(ctx: Context, url: str, extract_markdown: bool = True, sessi
     print("LIFESPAN:", getattr(ctx, 'lifespan_context', 'NOT FOUND'))
     print("STATE:", getattr(ctx, 'state', 'NOT FOUND'))
 
-    client = ctx.lifespan_context["client"]
+    client = ctx.lifespan_context["crawl4ai_client"]
     result = await _crawl_single_url(client, url, session_id)
 
     if not is_success(result):
@@ -212,7 +212,7 @@ async def crawl_multiple_urls(ctx: Context, urls: list[str], session_id: str = N
         urls: A list of URLs to crawl.
         session_id: if you want to reuse the same browser between multiple requests
     """
-    client = ctx.lifespan_context["client"]
+    client = ctx.lifespan_context["crawl4ai_client"]
 
     tasks = [_crawl_single_url(client, url, session_id) for url in urls]
     results = await asyncio.gather(*tasks)
@@ -225,72 +225,6 @@ async def crawl_multiple_urls(ctx: Context, urls: list[str], session_id: str = N
             output[url] = f"Error: {get_error(result)}"
 
     return output
-
-
-# ----------------------------
-# 1. DEFAULT STEALTH CONFIG
-# ----------------------------
-
-DEFAULT_CONFIG = {
-    "browser": {
-        "headless": True,
-        "stealth": True,
-
-        "args": [
-            "--headless=new",
-            "--no-sandbox",
-            "--disable-setuid-sandbox",
-            "--disable-blink-features=AutomationControlled",
-            "--disable-dev-shm-usage",
-        ],
-
-        "viewport": {
-            "width": None,
-            "height": None,
-        },
-
-        "user_agent": None,
-    },
-
-    "crawl": {
-        "delay_before_return_html": None,
-        "simulate_user": True,
-        "scroll": True,
-        "max_scroll": random.randint(2, 5),
-        "wait_for": "networkidle",
-        "locale": "en-US",
-        "timezone_id": "America/Toronto",
-    },
-
-    # proxy placeholder (VERY IMPORTANT in real usage)
-    "proxy": None,
-}
-
-# ----------------------------
-# 2. DOMAIN-SPECIFIC OVERRIDES
-# ----------------------------
-
-DOMAIN_CONFIGS = {
-    "google.com": {
-        "crawl": {
-            "delay_before_content": 6,
-        },
-        "browser": {
-            "browser_type": "undetected"
-        }
-    },
-    "duckduckgo.com": {
-        "browser": {
-            "browser_type": "undetected"
-        }
-    },
-    "medium.com": {
-        "crawl": {
-            "scroll": True,
-            "max_scroll": 6,
-        }
-    },
-}
 
 
 # ----------------------------
