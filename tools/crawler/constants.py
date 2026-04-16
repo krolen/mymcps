@@ -45,6 +45,11 @@ DOMAIN_CONFIGS = {
             "browser_type": "undetected"
         }
     },
+    "bing.com": {
+        "browser": {
+            "browser_type": "undetected"
+        }
+    },
     "medium.com": {
         "crawl": {
             "scroll": True,

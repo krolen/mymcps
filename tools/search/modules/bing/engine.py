@@ -9,5 +9,7 @@ async def search(ctx: Context, query: str, time_range: Optional[str] = None, lim
     """
     Perform a search using Bing. Currently returns nothing.
     """
+    #  sample bing query: https://www.bing.com/search?q=hello+world&count=10&first=1&mkt=en-CA&setlang=en&freshness=Day
+    #  freshness — Day, Week, Month
     logger.info(f"Bing search for query: {query}")
     return []
