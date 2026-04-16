@@ -18,15 +18,24 @@ DEFAULT_CONFIG = {
             "height": None,
         },
         "user_agent": None,
+        "headers": {                           # ← Add realistic headers
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-CA,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Referer": "https://www.google.ca/",  # ← Appear to come from Google
+        },
     },
     "crawl": {
-        "delay_before_return_html": None,
+        "delay_before_return_html": 3.0,      # Give JS time to render after load
         "simulate_user": True,
+        "magic": True,                         # ← Add this: enables stealth mode in crawl4ai
         "scroll": True,
-        "max_scroll": 5, # Using a fixed value here, randomization handled in server
-        "wait_for": "networkidle",
+        "max_scroll": 3,
+        "wait_for": "domcontentloaded",        # ← Change from "networkidle" — news sites never idle
+        "page_timeout": 30000,                 # ← Explicit timeout in ms (30s)
         "locale": "en-US",
         "timezone_id": "America/Toronto",
+        "ignore_https_errors": True,           # ← Prevents abort on cert issues
     },
     "proxy": None,
 }
@@ -34,7 +43,7 @@ DEFAULT_CONFIG = {
 DOMAIN_CONFIGS = {
     "google.com": {
         "crawl": {
-            "delay_before_content": 6,
+            "delay_before_return_html": 6,
         },
         "browser": {
             "browser_type": "undetected"
