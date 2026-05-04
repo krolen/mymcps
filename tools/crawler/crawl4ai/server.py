@@ -92,6 +92,8 @@ def get_browser_config(url: str = "", session_id: str = None) -> BrowserConfig:
         user_data_dir=f"/app/user_data/{session_id}" if session_id else "/app/user_data/default",
         use_persistent_context=True,
         browser_type=browser_settings.get("browser_settings", "chromium"),
+        text_mode=True,
+        # light_mode=True,
     )
 
 

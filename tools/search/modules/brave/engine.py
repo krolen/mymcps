@@ -154,7 +154,7 @@ async def search(ctx: Context, query: str, time_range: Optional[str] = None, lim
                 logger.warning("No results found via crawl4ai, falling back to Jina AI")
         else:
             error = getattr(result, 'error', 'Unknown error')
-            logger.warning(f"Crawl4ai failed: {error}, falling back to Jina AI")
+            logger.warning(f"Crawl4ai failed: {error}, falling back to Jina AI. Result: {result}")
     except Exception as e:
         logger.warning(f"Error using crawl4ai for Brave search: {e}, falling back to Jina AI")
 
