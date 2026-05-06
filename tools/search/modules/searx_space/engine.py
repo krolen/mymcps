@@ -12,6 +12,7 @@ from .manager import SearxSpaceManager
 
 logger = logging.getLogger(__name__)
 
+
 class SearxSpaceEngine:
     def __init__(self, manager: SearxSpaceManager):
         self.manager = manager
@@ -57,13 +58,16 @@ class SearxSpaceEngine:
                 success_count += 1
             except httpx.HTTPStatusError as e:
                 if e.response.status_code == 429:
-                    logger.warning(f"Instance {instance_url} returned 429 (Too Many Requests). Quarantining for 2 hours.")
+                    logger.warning(
+                        f"Instance {instance_url} returned 429 (Too Many Requests). Quarantining for 2 hours.")
                     self.manager.quarantine_instance(instance_url, 2)
                 else:
-                    logger.warning(f"Instance {instance_url} failed with status {e.response.status_code}. Quarantining for 24 hours.")
+                    logger.warning(
+                        f"Instance {instance_url} failed with status {e.response.status_code}. Quarantining for 24 hours.")
                     self.manager.quarantine_instance(instance_url, 24)
             except Exception as e:
-                logger.warning(f"Instance {instance_url} failed with exception {type(e).__name__}: {e}. Quarantining for 24 hours.")
+                logger.warning(
+                    f"Instance {instance_url} failed with exception {type(e).__name__}: {e}. Quarantining for 24 hours.")
                 self.manager.quarantine_instance(instance_url, 24)
 
         # 3. Join results: sort by score and apply limit
@@ -88,36 +92,36 @@ class SearxSpaceEngine:
         client = get_client()
         # SearXNG search URL format: /search
         search_url = f"{instance_url.rstrip('/')}/search"
-        params = {"q": query, "format": "json"}
+        params = {"q": query}
 
         response = None
         try:
-            try:
-                # Try POST first as it often avoids some restrictions
-                response = await client.post(search_url, data=params)
-                response.raise_for_status()
-            except Exception as e:
-                logger.debug(f"POST failed for {instance_url}, trying GET: {e}")
-                response = await client.get(search_url, params=params)
-                response.raise_for_status()
+            # try:
+            # Try POST first as it often avoids some restrictions
+            response = await client.get(search_url, params=params)
+            response.raise_for_status()
+        # except Exception as e:
+        #     logger.debug(f"GET failed for {instance_url}, trying POST: {e}")
+        #     response = await client.post(search_url, data=params)
+        #     response.raise_for_status()
         except Exception as e:
             logger.info(f"Instance {instance_url} failed with default client, retrying with proxy client: {e}")
             proxy_client = get_proxy_client()
             try:
-                try:
-                    # Try Proxy POST
-                    response = await proxy_client.post(search_url, data=params)
-                    response.raise_for_status()
-                except Exception as e_p:
-                    logger.debug(f"Proxy POST failed for {instance_url}, trying Proxy GET: {e_p}")
-                    response = await proxy_client.get(search_url, params=params)
-                    response.raise_for_status()
+                # try:
+                # Try Proxy POST
+                response = await proxy_client.get(search_url, params=params)
+                response.raise_for_status()
+            # except Exception as e_p:
+            #     logger.debug(f"Proxy GET failed for {instance_url}, trying Proxy POST: {e_p}")
+            #     response = await proxy_client.post(search_url, data=params)
+            #     response.raise_for_status()
             except Exception as proxy_e:
                 logger.error(f"Proxy search failed for {instance_url}: {proxy_e}")
                 raise proxy_e
 
         if response is None:
-             raise RuntimeError("Failed to get a response from SearXNG instance")
+            raise RuntimeError("Failed to get a response from SearXNG instance")
 
         data = response.json()
 

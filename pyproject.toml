@@ -9,6 +9,7 @@ dependencies = [
     "requests>=2.33.1",
     "crawl4ai==0.8.6",
     "pydantic>=2.12.5",
+    "beautifulsoup4>=4.14.3",
 ]
 
 [dependency-groups]

@@ -17,7 +17,7 @@ def get_client() -> httpx.AsyncClient:
     global _client
     if _client is None or _client.is_closed:
         # Default timeout of 30s and follow_redirects=True for general web usage
-        _client = httpx.AsyncClient(timeout=30.0, follow_redirects=True)
+        _client = httpx.AsyncClient(timeout=30.0, follow_redirects=True, http2=True)
     return _client
 
 def get_proxy_client() -> httpx.AsyncClient:
@@ -31,7 +31,7 @@ def get_proxy_client() -> httpx.AsyncClient:
         return get_client()
 
     if _proxy_client is None or _proxy_client.is_closed:
-        _proxy_client = httpx.AsyncClient(proxy=proxy, timeout=30.0, follow_redirects=True)
+        _proxy_client = httpx.AsyncClient(proxy=proxy, timeout=30.0, follow_redirects=True, http2=True)
     return _proxy_client
 
 async def close_client():

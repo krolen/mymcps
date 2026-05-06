@@ -18,7 +18,7 @@ async def test_searx_space_general_search():
     engine = SearxSpaceEngine(manager)
 
     # We use a query with both !g and !ddg shortcuts to test multiple engines
-    query = "!g !ddg Claude AI search test"
+    query = "!google !ddg Claude AI search test"
     limit = 5
 
     logger.info(f"Performing search with query: {query}")
