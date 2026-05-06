@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Development Guidelines
 
-- If you need to run any tests using python files, create those under the `./tmp` directory instead of the root.
+- If you need to run any tests using python files, create those under the `tests/` directory.
 - Create all plans, memories, agents, skills, and other metadata under the local Claude directory.
 - If you need to fetch some known url you use curl
 
