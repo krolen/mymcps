@@ -19,7 +19,7 @@ async def crawl_via_jina(url: str) -> str:
 
     try:
         client = get_client()
-        jina_key = os.getenv("jinaKey")
+        jina_key = os.getenv("JINA_API_KEY")
         headers = {"Authorization": f"Bearer {jina_key}"} if jina_key else {}
 
         response = await client.get(jina_url, headers=headers)

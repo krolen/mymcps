@@ -163,7 +163,7 @@ async def search(ctx: Context, query: str, time_range: Optional[str] = None, lim
         logger.info(f"Falling back to Brave search via Jina AI for query: {query}")
         jina_url = f"https://r.jina.ai/{brave_url}"
         client = ctx.lifespan_context.get("http_client") or get_client()
-        jina_key = os.getenv("jinaKey")
+        jina_key = os.getenv("JINA_API_KEY")
         headers = {"Authorization": f"Bearer {jina_key}"} if jina_key else {}
 
         response = await client.get(jina_url, headers=headers)

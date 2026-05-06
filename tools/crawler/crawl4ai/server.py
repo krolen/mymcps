@@ -10,14 +10,11 @@ import random
 from contextlib import asynccontextmanager
 from urllib.parse import urlparse
 from tools.crawler.constants import CRAWL4AI_SERVER_URL, DEFAULT_CONFIG, DOMAIN_CONFIGS
-from crawl4ai import BrowserConfig, CrawlerRunConfig, PruningContentFilter, DefaultMarkdownGenerator
+from crawl4ai import BrowserConfig, CrawlerRunConfig, PruningContentFilter, DefaultMarkdownGenerator, ProxyConfig
 from crawl4ai.docker_client import Crawl4aiDockerClient
 from fastmcp import FastMCP, Context
 
-# Import the proxy generator
-
 CRAWL_SEMAPHORE = asyncio.Semaphore(10)
-
 
 # Result utility functions
 def is_success(result) -> bool:
@@ -93,6 +90,7 @@ def get_browser_config(url: str = "", session_id: str = None) -> BrowserConfig:
         use_persistent_context=True,
         browser_type=browser_settings.get("browser_settings", "chromium"),
         text_mode=True,
+        proxy_config=ProxyConfig.from_string("http://55363143455c2b8dc0f7__cr.ca:24960aa286d32639@gw.dataimpulse.com:823"),
         # light_mode=True,
     )
 
