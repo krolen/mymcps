@@ -1,13 +1,15 @@
 import logging
-import httpx
 import os
 from typing import Optional
+
+import httpx
 
 logger = logging.getLogger("http_client")
 
 # Global shared HTTP client to avoid repeated TCP/TLS handshakes
 _client: Optional[httpx.AsyncClient] = None
 _proxy_client: Optional[httpx.AsyncClient] = None
+
 
 def get_client() -> httpx.AsyncClient:
     """
@@ -19,6 +21,7 @@ def get_client() -> httpx.AsyncClient:
         # Default timeout of 30s and follow_redirects=True for general web usage
         _client = httpx.AsyncClient(timeout=30.0, follow_redirects=True)
     return _client
+
 
 def get_proxy_client() -> httpx.AsyncClient:
     """
@@ -33,6 +36,7 @@ def get_proxy_client() -> httpx.AsyncClient:
     if _proxy_client is None or _proxy_client.is_closed:
         _proxy_client = httpx.AsyncClient(proxy=proxy, timeout=30.0, follow_redirects=True)
     return _proxy_client
+
 
 async def close_client():
     """
