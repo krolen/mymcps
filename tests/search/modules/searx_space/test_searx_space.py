@@ -10,6 +10,7 @@ from tools.search.modules.searx_space.manager import SearxSpaceManager
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 @pytest.mark.asyncio
 async def test_searx_space_general_search():
     """Test general search using Google and DuckDuckGo via shortcuts"""
@@ -21,12 +22,11 @@ async def test_searx_space_general_search():
     limit = 5
 
     logger.info(f"Performing search with query: {query}")
-    results = await engine.search(query)
+    results = await engine.search(query, {"language": "en-US", "time_range": "day"})
 
     logger.info(f"Received {len(results)} results")
     for i, res in enumerate(results):
-        logger.info(f"Result {i+1}: {res.title} - {res.url} (score: {res.score})")
-
+        logger.info(f"Result {i + 1}: {res.title} - {res.url} (score: {res.score}) - {res.content}")
 
     # Verify we got some results
     assert len(results) > 0, "Should return at least one result"
@@ -38,7 +38,8 @@ async def test_searx_space_general_search():
 
     # Verify that the results are sorted by score
     for i in range(len(results) - 1):
-        assert results[i].score >= results[i+1].score, "Results should be sorted by score descending"
+        assert results[i].score >= results[i + 1].score, "Results should be sorted by score descending"
+
 
 @pytest.mark.asyncio
 async def test_searx_space_default_search():
@@ -50,17 +51,14 @@ async def test_searx_space_default_search():
     limit = 5
 
     logger.info(f"Performing search with query: {query}")
-    results = await engine.search(query, limit=limit)
+    results = await engine.search(query)
 
     logger.info(f"Received {len(results)} results")
     for i, res in enumerate(results):
-        logger.info(f"Result {i+1}: {res.title} - {res.url} (score: {res.score})")
-    for i, res in enumerate(results):
-        logger.info(f"Result {i+1}: {res.title} - {res.url} (score: {res.score})")
-    for i, res in enumerate(results):
-        logger.info(f"Result {i+1}: {res.title} - {res.url} (score: {res.score})")
+        logger.info(f"Result {i + 1}: {res.title} - {res.url} (score: {res.score}) - {res.content}")
 
     assert len(results) > 0, "Should return results for a general query"
+
 
 if __name__ == "__main__":
     # Run the tests using asyncio
@@ -80,5 +78,6 @@ if __name__ == "__main__":
             logger.error(f"test_searx_space_default_search: FAILED - {e}")
             import traceback
             traceback.print_exc()
+
 
     asyncio.run(run_tests())

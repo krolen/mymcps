@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import List, Tuple
 
 class SearchEngineShortcut(Enum):
     GOOGLE = "!g"
@@ -51,3 +52,19 @@ class SearchEngineShortcut(Enum):
             cls.YOUTUBE.value: "youtube",
         }
         return mapping.get(shortcut, "general")
+
+def parse_shortcuts(query: str) -> Tuple[List[str], str]:
+    """
+    Parses a search query for engine shortcuts (e.g., !g, !bi).
+    Returns a list of engine names and the cleaned query.
+    """
+    engines = []
+    for shortcut in SearchEngineShortcut:
+        if shortcut.value in query:
+            engines.append(SearchEngineShortcut.get_engine_name(shortcut.value))
+
+    cleaned_query = query
+    for shortcut in SearchEngineShortcut:
+        cleaned_query = cleaned_query.replace(shortcut.value, "")
+
+    return engines, cleaned_query.strip()

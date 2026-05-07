@@ -129,9 +129,10 @@ def _format_results(
 async def search(
         ctx: Context,
         query: str,
-        my_search_engines: List[str],
+        search_engines: List[str],
         time_range: Optional[str] = None,
-        limit: int = 30
+        language: Optional[str] = "en-US",
+        limit: Optional[int] = None
 ) -> dict:
     """
     Perform a search using SearXNG.
@@ -144,37 +145,41 @@ async def search(
     will return an error because general defaults often ignore time filters.
 
     Args:
-        ctx: The MCP context.
-        query: The search query.
-        my_search_engines: List of specific engines to use. (REQUIRED if time_range is used).
+        :param  ctx: The MCP context.
+        :param query: The search query.
+        :param search_engines: List of specific engines to use. (REQUIRED if time_range is used).
                            Obtain the valid list of engines and their capabilities 
                            by calling the 'web_searxng_list_engines' tool.
-        time_range: Filter results by time (day, week, month, year). 
+        :param time_range: Filter results by time (day, week, month, year).
                     Only works for engines where 'supports_time_range' is True.
-        limit: Max number of results to return.
+        :param limit: Max number of results to return.
+        :param language: Ask to return results in certain language
     """
     # 1. Validate time_range and filter engines
-    valid_engines, error_res = _validate_and_filter_engines(my_search_engines, time_range)
+    valid_engines, error_res = _validate_and_filter_engines(search_engines, time_range)
     if error_res:
         return error_res
-    my_search_engines = valid_engines
+    search_engines = valid_engines
 
     # Handle engines with modules
-    engines_with_modules = [eng for eng in (my_search_engines if my_search_engines is not None else []) if eng in ENGINE_MODULES]
+    engines_with_modules = [eng for eng in (search_engines if search_engines is not None else []) if eng in ENGINE_MODULES]
 
     # We'll call modules if SearXNG fails or if we want to supplement results.
     # For now, let's prepare to call them.
 
     params = {
         "q": query,
-        "format": "json",
+        "theme": "simple"
     }
 
-    if my_search_engines:
-        params["engines"] = ",".join(my_search_engines)
+    if search_engines:
+        params["engines"] = ",".join(search_engines)
 
     if time_range:
         params["time_range"] = time_range
+
+    if not language:
+        params["language"] = "en-US"
 
     try:
         client = ctx.lifespan_context.get("http_client") or get_client()
