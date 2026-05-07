@@ -1,8 +1,5 @@
 from bs4 import BeautifulSoup
 from tools.search.models import SearchResult, SearXNGResponse
-from bs4 import BeautifulSoup
-
-from tools.search.models import SearchResult, SearXNGResponse
 
 
 def parse_searxng_html(html: str, query: str) -> SearXNGResponse:

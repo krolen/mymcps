@@ -4,7 +4,8 @@ from typing import List, Set
 
 import httpx
 
-from tools.common.http_client import get_client, get_proxy_client
+from .browser_client import get_browser_session, get_browser_session_with_proxy
+from .parser import parse_searxng_html
 from tools.search.models import SearchResult
 from .models import SearxSpaceData
 from .shortcuts import SearchEngineShortcut
@@ -88,45 +89,51 @@ class SearxSpaceEngine:
 
         return engines, cleaned_query.strip()
 
-    async def _execute_instance_search(self, instance_url: str, query: str) -> List[SearchResult]:
-        client = get_client()
-        # SearXNG search URL format: /search
-        search_url = f"{instance_url.rstrip('/')}/search"
-        params = {"q": query}
-
-        response = None
+    async def _request_with_fallback(self, instance_url: str, search_url: str, params: dict):
+        """Attempts a request with a standard session, falling back to a proxy if a 429 is encountered."""
+        # Try standard session
         try:
-            # try:
-            # Try POST first as it often avoids some restrictions
+            client = await get_browser_session()
             response = await client.get(search_url, params=params)
-            response.raise_for_status()
-        # except Exception as e:
-        #     logger.debug(f"GET failed for {instance_url}, trying POST: {e}")
-        #     response = await client.post(search_url, data=params)
-        #     response.raise_for_status()
-        except Exception as e:
-            logger.info(f"Instance {instance_url} failed with default client, retrying with proxy client: {e}")
-            proxy_client = get_proxy_client()
-            try:
-                # try:
-                # Try Proxy POST
+            if response.status_code == 200:
+                return response
+            if response.status_code == 429:
+                logger.info(f"Instance {instance_url} returned 429, trying with proxy...")
+                # Fallback to proxy session
+                proxy_client = await get_browser_session_with_proxy()
                 response = await proxy_client.get(search_url, params=params)
-                response.raise_for_status()
-            # except Exception as e_p:
-            #     logger.debug(f"Proxy GET failed for {instance_url}, trying Proxy POST: {e_p}")
-            #     response = await proxy_client.post(search_url, data=params)
-            #     response.raise_for_status()
-            except Exception as proxy_e:
-                logger.error(f"Proxy search failed for {instance_url}: {proxy_e}")
-                raise proxy_e
+                if response.status_code == 200:
+                    return response
+        except Exception as e:
+            logger.debug(f"Request attempt failed for {instance_url}: {e}")
 
-        if response is None:
-            raise RuntimeError("Failed to get a response from SearXNG instance")
+        return None
 
-        data = response.json()
+    async def _execute_instance_search(self, instance_url: str, query: str) -> List[SearchResult]:
+        search_url = f"{instance_url.rstrip('/')}/search"
+
+        # 1. Try JSON first (preferred)
+        json_params = {"q": query, "format": "json"}
+        response = await self._request_with_fallback(instance_url, search_url, json_params)
+        if response:
+            return self._parse_json_response(response, instance_url)
+
+        # 2. Fallback: Try without JSON (HTML)
+        html_params = {"q": query}
+        response = await self._request_with_fallback(instance_url, search_url, html_params)
+        if response:
+            return self._parse_html_response(response, instance_url, query)
+
+        raise RuntimeError(f"Failed to get search results from {instance_url}")
+
+    def _parse_json_response(self, response, instance_url: str) -> List[SearchResult]:
+        try:
+            data = response.json()
+        except Exception as e:
+            logger.warning(f"Failed to parse JSON response from {instance_url}: {e}")
+            raise RuntimeError("Response was not JSON")
 
         results = []
-        # SearXNG JSON response usually has a 'results' key
         for item in data.get("results", []):
             results.append(SearchResult(
                 title=item.get("title", ""),
@@ -136,3 +143,15 @@ class SearxSpaceEngine:
                 engine=f"searxng@{instance_url}"
             ))
         return results
+
+    def _parse_html_response(self, response, instance_url: str, query: str) -> List[SearchResult]:
+        parsed_response = parse_searxng_html(response.text, query)
+        return [
+            SearchResult(
+                title=res.title,
+                url=res.url,
+                content=res.content,
+                score=res.score,
+                engine=f"searxng@{instance_url}"
+            ) for res in parsed_response.results
+        ]
