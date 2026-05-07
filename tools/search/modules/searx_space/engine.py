@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from typing import List, Set
 
 import httpx
@@ -18,25 +19,11 @@ class SearxSpaceEngine(SearchEngine):
         self.manager = manager
 
     async def search(self, query: str, params: dict = None) -> List[SearchResult]:
-        # 1. Parse shortcuts for instance selection
-        requested_engines, cleaned_query = parse_shortcuts(query)
+        params = params or {}
 
-        # Also check for engines provided in params (as a comma-separated string)
-        if params and "engines" in params:
-            param_engines = params["engines"].split(",") if isinstance(params["engines"], str) else []
-            # Append param engines to requested_engines while preserving order and removing duplicates
-            for eng in param_engines:
-                if eng and eng not in requested_engines:
-                    requested_engines.append(eng)
-
-        # If no engine specified, use prioritized list matching the general engines in SearchEngineShortcut
-        if not requested_engines:
-            requested_engines = [
-                SearchEngineShortcut.get_engine_name(SearchEngineShortcut.GOOGLE.value),
-                SearchEngineShortcut.get_engine_name(SearchEngineShortcut.BING.value),
-                SearchEngineShortcut.get_engine_name(SearchEngineShortcut.DDG.value),
-                SearchEngineShortcut.get_engine_name(SearchEngineShortcut.BRAVE.value),
-            ]
+        # 1. Resolve requested engines and clean query
+        requested_engines, cleaned_query = self._resolve_engines(query, params)
+        params["engines"] = ",".join(requested_engines)
 
         all_results: List[SearchResult] = []
         seen_urls: Set[str] = set()
@@ -85,10 +72,33 @@ class SearxSpaceEngine(SearchEngine):
 
         # 3. Join results: sort by score and apply limit
         all_results.sort(key=lambda x: x.score, reverse=True)
-        limit_ = params.get("limit") if params else None
-        return all_results[:limit_] if limit_ else all_results
+        limit_ : str | int = params.get("limit")
+        if limit_ is not None:
+            return all_results[:int(limit_)]
+        return all_results
 
-    # (Remaining methods)
+    def _resolve_engines(self, query: str, params: dict) -> tuple[List[str], str]:
+        # Parse shortcuts for instance selection
+        requested_engines, cleaned_query = parse_shortcuts(query)
+
+        # Also check for engines provided in params (as a comma-separated string)
+        if "engines" in params:
+            param_engines = params["engines"].split(",") if isinstance(params["engines"], str) else []
+            # Append param engines to requested_engines while preserving order and removing duplicates
+            for eng in param_engines:
+                if eng and eng not in requested_engines:
+                    requested_engines.append(eng)
+
+        # If no engine specified, use prioritized list matching the general engines in SearchEngineShortcut
+        if not requested_engines:
+            requested_engines = [
+                SearchEngineShortcut.get_engine_name(SearchEngineShortcut.GOOGLE.value),
+                SearchEngineShortcut.get_engine_name(SearchEngineShortcut.BING.value),
+                SearchEngineShortcut.get_engine_name(SearchEngineShortcut.DDG.value),
+                SearchEngineShortcut.get_engine_name(SearchEngineShortcut.BRAVE.value),
+            ]
+
+        return requested_engines, cleaned_query
 
     async def _request_with_fallback(self, instance_url: str, search_url: str, params: dict):
         """Attempts a request with a standard session, falling back to a proxy if a 429 is encountered."""

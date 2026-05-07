@@ -36,7 +36,7 @@ async def _parse_search_results_jina(content: str, limit: int) -> List[SearchRes
                 continue
             title = title_match.group(1)
 
-            url_match = URL_PATTERN.search(part,,
+            url_match = URL_PATTERN.search(part)
             if not url_match:
                 continue
             url = url_match.group(1)
