@@ -1,15 +1,14 @@
-import asyncio
 import logging
 from typing import List, Set
 
 import httpx
 
-from .browser_client import get_browser_session, get_browser_session_with_proxy
-from .parser import parse_searxng_html
+from tools.search.constants import SearchConstants
 from tools.search.models import SearchResult
-from .models import SearxSpaceData
-from .shortcuts import SearchEngineShortcut
+from .browser_client import get_browser_session, get_browser_session_with_proxy
 from .manager import SearxSpaceManager
+from .parser import parse_searxng_html
+from .shortcuts import SearchEngineShortcut
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +17,7 @@ class SearxSpaceEngine:
     def __init__(self, manager: SearxSpaceManager):
         self.manager = manager
 
-    async def search(self, query: str, limit: int = 10) -> List[SearchResult]:
+    async def search(self, query: str, limit: int = None) -> List[SearchResult]:
         # 1. Parse shortcuts for instance selection
         requested_engines, _ = self._parse_shortcuts(query)
 
@@ -38,6 +37,8 @@ class SearxSpaceEngine:
         await self.manager.get_instances()
         # Request a large number of candidates to allow for fallbacks
         candidates = self.manager.get_best_instances(requested_engines, count=50)
+        # Prioritize local instance
+        candidates = [SearchConstants.SEARXNG_URL] + candidates
 
         if not candidates:
             logger.warning("No instances found that support any of the requested engines")
@@ -52,11 +53,12 @@ class SearxSpaceEngine:
 
             try:
                 results = await self._execute_instance_search(instance_url, query)
-                for res in results:
-                    if res.url not in seen_urls:
-                        all_results.append(res)
-                        seen_urls.add(res.url)
-                success_count += 1
+                if results:
+                    for res in results:
+                        if res.url not in seen_urls:
+                            all_results.append(res)
+                            seen_urls.add(res.url)
+                    success_count += 1
             except httpx.HTTPStatusError as e:
                 if e.response.status_code == 429:
                     logger.warning(
@@ -73,7 +75,7 @@ class SearxSpaceEngine:
 
         # 3. Join results: sort by score and apply limit
         all_results.sort(key=lambda x: x.score, reverse=True)
-        return all_results[:limit]
+        return all_results[:limit] if limit else all_results
 
     def _parse_shortcuts(self, query: str) -> tuple[List[str], str]:
         engines = []
@@ -94,44 +96,56 @@ class SearxSpaceEngine:
         # Try standard session
         try:
             client = await get_browser_session()
-            response = await client.get(search_url, params=params)
+            response = await client.post(search_url, params=params)
             if response.status_code == 200:
+                logger.info(f"Instance {instance_url}: got 200")
                 return response
             if response.status_code == 429:
                 logger.info(f"Instance {instance_url} returned 429, trying with proxy...")
                 # Fallback to proxy session
                 proxy_client = await get_browser_session_with_proxy()
-                response = await proxy_client.get(search_url, params=params)
+                response = await proxy_client.post(search_url, params=params, allow_redirects=False)
                 if response.status_code == 200:
+                    logger.info(f"Instance {instance_url} proxy call succeed")
                     return response
+            logger.warning(f"Instance {instance_url} failed with status {response.status_code}: {response.content}")
         except Exception as e:
-            logger.debug(f"Request attempt failed for {instance_url}: {e}")
+            logger.warning(f"Request attempt failed for {instance_url}: {e}")
 
         return None
 
     async def _execute_instance_search(self, instance_url: str, query: str) -> List[SearchResult]:
         search_url = f"{instance_url.rstrip('/')}/search"
+        logger.info(f"Executing search on instance {instance_url} for query: {query}")
 
         # 1. Try JSON first (preferred)
         json_params = {"q": query, "format": "json"}
         response = await self._request_with_fallback(instance_url, search_url, json_params)
         if response:
-            return self._parse_json_response(response, instance_url)
+            parsed = self._parse_json_response(response, instance_url)
+            if parsed:
+                logger.info(f"JSON search successful on {instance_url}, found {len(parsed)} results")
+                return parsed
+
+        logger.info(f"JSON search failed or returned no results on {instance_url}, falling back to HTML")
 
         # 2. Fallback: Try without JSON (HTML)
         html_params = {"q": query}
         response = await self._request_with_fallback(instance_url, search_url, html_params)
         if response:
-            return self._parse_html_response(response, instance_url, query)
+            results = self._parse_html_response(response, instance_url, query)
+            logger.info(f"HTML search successful on {instance_url}, found {len(results)} results")
+            return results
 
+        logger.error(f"All search attempts failed for instance {instance_url}")
         raise RuntimeError(f"Failed to get search results from {instance_url}")
 
-    def _parse_json_response(self, response, instance_url: str) -> List[SearchResult]:
+    def _parse_json_response(self, response, instance_url: str) -> List[SearchResult] | None:
         try:
             data = response.json()
         except Exception as e:
             logger.warning(f"Failed to parse JSON response from {instance_url}: {e}")
-            raise RuntimeError("Response was not JSON")
+            return None
 
         results = []
         for item in data.get("results", []):
@@ -140,7 +154,7 @@ class SearxSpaceEngine:
                 url=item.get("url", ""),
                 content=item.get("content", ""),
                 score=item.get("score", 1.0),
-                engine=f"searxng@{instance_url}"
+                engine=f"searxng@{instance_url}/{item.get('engine', '')}"
             ))
         return results
 
@@ -152,6 +166,6 @@ class SearxSpaceEngine:
                 url=res.url,
                 content=res.content,
                 score=res.score,
-                engine=f"searxng@{instance_url}"
+                engine=f"searxng@{instance_url}/{res.engine}"
             ) for res in parsed_response.results
         ]

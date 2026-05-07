@@ -3,9 +3,8 @@ import logging
 
 import pytest
 
-from tools.search.modules.searx_space.manager import SearxSpaceManager
 from tools.search.modules.searx_space.engine import SearxSpaceEngine
-from tools.search.modules.searx_space.shortcuts import SearchEngineShortcut
+from tools.search.modules.searx_space.manager import SearxSpaceManager
 
 # Configure logging to see what's happening
 logging.basicConfig(level=logging.INFO)
@@ -18,19 +17,16 @@ async def test_searx_space_general_search():
     engine = SearxSpaceEngine(manager)
 
     # We use a query with both !g and !ddg shortcuts to test multiple engines
-    query = "!google !ddg Claude AI search test"
+    query = "!g !ddg Claude AI search test"
     limit = 5
 
     logger.info(f"Performing search with query: {query}")
-    results = await engine.search(query, limit=limit)
+    results = await engine.search(query)
 
     logger.info(f"Received {len(results)} results")
     for i, res in enumerate(results):
         logger.info(f"Result {i+1}: {res.title} - {res.url} (score: {res.score})")
-    for i, res in enumerate(results):
-        logger.info(f"Result {i+1}: {res.title} - {res.url} (score: {res.score})")
-    for i, res in enumerate(results):
-        logger.info(f"Result {i+1}: {res.title} - {res.url} (score: {res.score})")
+
 
     # Verify we got some results
     assert len(results) > 0, "Should return at least one result"

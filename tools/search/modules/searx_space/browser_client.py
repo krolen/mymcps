@@ -14,7 +14,7 @@ async def get_browser_session() -> AsyncSession:
     global _session
     if _session is None:
         # Impersonating Chrome allows bypassing many bot detection systems
-        _session = AsyncSession(impersonate="chrome120", timeout=10.0)
+        _session = AsyncSession(impersonate="chrome120", timeout=10.0, allow_redirects=False)
     return _session
 
 async def get_browser_session_with_proxy() -> AsyncSession:
@@ -30,7 +30,8 @@ async def get_browser_session_with_proxy() -> AsyncSession:
     # so we create a separate session for the proxy
     # In a real-world scenario, you might need a more sophisticated session manager
     # if you are multiple proxies.
-    return AsyncSession(impersonate="chrome120", proxy=proxy, timeout=10.0)
+    session = AsyncSession(impersonate="chrome120", proxy=proxy, timeout=10.0, allow_redirects=False)
+    return session
 
 async def close_browser_session():
     """
