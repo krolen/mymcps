@@ -25,3 +25,4 @@ Thumbs.db
 /tmp/
 
 .env
+/tools/search/modules/searx_space/quarantine.json

@@ -25,6 +25,11 @@ class SearchConstants:
 
     # Engine definitions
     ENGINES = {
+        "google": {
+            "description": "Google Search - General web search",
+            "categories": ["general"],
+            "time_range_support": True
+        },
         "brave": {
             "description": "Brave Search - General web search, privacy-focused",
             "categories": ["general"],

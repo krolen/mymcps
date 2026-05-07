@@ -140,25 +140,25 @@ async def search(
     # 2. Perform the search using registered engines if they are specified
     all_results = []
     seen_urls = set()
-    if search_engines:
-        tasks = [
-            ENGINE_REGISTRY[eng].search(
-                query=query,
-                params=params
-            )
-            for eng in search_engines if eng in ENGINE_REGISTRY
-        ]
+    tasks = [
+        ENGINE_REGISTRY[eng].search(
+            query=query,
+            params=params
+        )
+        for eng in ENGINE_REGISTRY
+    ]
 
-        if tasks:
-            results_lists = await asyncio.gather(*tasks, return_exceptions=True)
-            for result_list in results_lists:
-                if isinstance(result_list, list):
-                    for r in result_list:
-                        if r.url and r.url not in seen_urls:
-                            all_results.append(r)
-                            seen_urls.add(r.url)
-                else:
-                    logger.error(f"Error during polymorphic search: {result_list}")
+    if tasks:
+        results_lists = await asyncio.gather(*tasks, return_exceptions=True)
+        for result_list in results_lists:
+            if isinstance(result_list, list):
+                for r in result_list:
+                    if r.url and r.url not in seen_urls:
+                        all_results.append(r)
+                        seen_urls.add(r.url)
+            else:
+                logger.error(f"Error during polymorphic search: {result_list}")
+
 
     return _format_results(
         query=query,

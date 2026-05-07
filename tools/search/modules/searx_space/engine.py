@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class SearxSpaceEngine(SearchEngine):
-    def __init__(self, manager: SearxSpaceManager):
+    def __init__(self, manager: SearxSpaceManager = SearxSpaceManager()):
         self.manager = manager
 
     async def search(self, query: str, params: dict = None) -> List[SearchResult]:
@@ -56,19 +56,17 @@ class SearxSpaceEngine(SearchEngine):
                             all_results.append(res)
                             seen_urls.add(res.url)
                     success_count += 1
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code == 429:
+            except Exception as e:
+                response = getattr(e, 'response', None)
+                status_code = getattr(response, 'status_code', None)
+                if status_code == 429:
                     logger.warning(
                         f"Instance {instance_url} returned 429 (Too Many Requests). Quarantining for 2 hours.")
                     self.manager.quarantine_instance(instance_url, 2)
                 else:
                     logger.warning(
-                        f"Instance {instance_url} failed with status {e.response.status_code}. Quarantining for 24 hours.")
+                        f"Instance {instance_url} failed ({type(e).__name__}: {e}). Quarantining for 24 hours.")
                     self.manager.quarantine_instance(instance_url, 24)
-            except Exception as e:
-                logger.warning(
-                    f"Instance {instance_url} failed with exception {type(e).__name__}: {e}. Quarantining for 24 hours.")
-                self.manager.quarantine_instance(instance_url, 24)
 
         # 3. Join results: sort by score and apply limit
         all_results.sort(key=lambda x: x.score, reverse=True)
@@ -103,7 +101,8 @@ class SearxSpaceEngine(SearchEngine):
     async def _request_with_fallback(self, instance_url: str, search_url: str, params: dict):
         """Attempts a request with a standard session, falling back to a proxy if a 429 is encountered."""
         client = await get_browser_session()
-        response = await client.post(search_url, data=params)
+        response = await client.get(search_url, params=params)
+        # response = await client.post(search_url, data=params)
 
         if response.status_code == 200:
             logger.info(f"Instance {instance_url}: got 200")
@@ -113,7 +112,8 @@ class SearxSpaceEngine(SearchEngine):
             logger.info(f"Instance {instance_url} returned 429, trying with proxy...")
             # Fallback to proxy session
             proxy_client = await get_browser_session_with_proxy()
-            response = await proxy_client.post(search_url, data=params, allow_redirects=False)
+            response = await proxy_client.get(search_url, params=params, allow_redirects=False)
+            # response = await proxy_client.post(search_url, data=params, allow_redirects=False)
             if response.status_code == 200:
                 logger.info(f"Instance {instance_url} proxy call succeed")
                 return response
@@ -155,6 +155,8 @@ class SearxSpaceEngine(SearchEngine):
 
         if response:
             response.raise_for_status()
+        else:
+            raise RuntimeError(f"No response received from {instance_url}")
 
         logger.error(f"All search attempts failed for instance {instance_url}")
         raise RuntimeError(f"Failed to get search results from {instance_url}")
