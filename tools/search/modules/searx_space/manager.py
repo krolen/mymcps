@@ -2,6 +2,7 @@ import time
 import logging
 import json
 import os
+import sqlite3
 from pathlib import Path
 from typing import List, Optional
 from pydantic import ValidationError
@@ -10,38 +11,35 @@ from .models import SearxSpaceData
 
 logger = logging.getLogger(__name__)
 
-QUARANTINE_FILE = Path(__file__).parent / "quarantine.json"
+QUARANTINE_DB = Path("data/quarantine.db").absolute()
 
 class SearxSpaceManager:
     def __init__(self):
         logger.info(f"Initializing SearxSpaceManager in process {os.getpid()}")
         self.instances_data: Optional[SearxSpaceData] = None
         self.last_updated = 0.0
-        self.refresh_interval = 300  # 5 minutes
-        self._quarantine_cache: dict[str, float] = self._load_quarantine()
+        self.refresh_interval = 9000  # 15 minutes
+        self._init_db()
 
-    def _load_quarantine(self) -> dict[str, float]:
-        """Load quarantine data from file."""
-        if not QUARANTINE_FILE.exists():
-            return {}
-        try:
-            with open(QUARANTINE_FILE, "r") as f:
-                return json.load(f)
-        except Exception as e:
-            logger.error(f"Failed to load quarantine file: {e}")
-            return {}
+    def _init_db(self):
+        """Initialize the SQLite database for quarantine."""
+        with sqlite3.connect(QUARANTINE_DB) as conn:
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS quarantine (url TEXT PRIMARY KEY, until REAL)"
+            )
+            conn.commit()
 
-    def _save_quarantine(self):
-        """Save quarantine data to file atomically using a unique temp file."""
-        tmp_file = QUARANTINE_FILE.with_name(f".{QUARANTINE_FILE.name}.{os.getpid()}.tmp")
+    def _save_quarantine(self, url: str, until: float):
+        """Save quarantine data to SQLite."""
         try:
-            with open(tmp_file, "w") as f:
-                json.dump(self._quarantine_cache, f)
-            os.replace(tmp_file, QUARANTINE_FILE)
+            with sqlite3.connect(QUARANTINE_DB) as conn:
+                conn.execute(
+                    "INSERT OR REPLACE INTO quarantine (url, until) VALUES (?, ?)",
+                    (url, until),
+                )
+                conn.commit()
         except Exception as e:
-            logger.error(f"Failed to save quarantine file: {e}")
-            if tmp_file.exists():
-                tmp_file.unlink()
+            logger.error(f"Failed to save quarantine to DB: {e}")
 
     async def refresh_instances(self):
         """Fetch and cache SearXNG instances from searx.space"""
@@ -64,11 +62,8 @@ class SearxSpaceManager:
 
     def quarantine_instance(self, url: str, duration_hours: float):
         """Move instance to quarantine for a specified duration"""
-        # Refresh cache from disk before updating to avoid overwriting other processes' changes
-        self._quarantine_cache = self._load_quarantine()
         until = time.time() + (duration_hours * 3600)
-        self._quarantine_cache[url] = until
-        self._save_quarantine()
+        self._save_quarantine(url, until)
         logger.info(f"Instance {url} quarantined until {time.ctime(until)}")
 
     def get_best_instances(self, engines: List[str], count: int = 3) -> List[str]:
@@ -76,13 +71,21 @@ class SearxSpaceManager:
         if not self.instances_data:
             return []
 
-        # Update local cache from disk
-        self._quarantine_cache = self._load_quarantine()
+        # Get quarantined instances from DB
         now = time.time()
+        quarantine_cache = {}
+        try:
+            with sqlite3.connect(QUARANTINE_DB) as conn:
+                cursor = conn.execute("SELECT url, until FROM quarantine WHERE until > ?", (now,))
+                for row in cursor:
+                    quarantine_cache[row[0]] = row[1]
+        except Exception as e:
+            logger.error(f"Failed to load quarantine from DB: {e}")
+
         candidates = []
         for url, info in self.instances_data.instances.items():
             # Filter out quarantined instances
-            if url in self._quarantine_cache and now < self._quarantine_cache[url]:
+            if url in quarantine_cache:
                 continue
 
             # Only consider instances with 100% uptime for the last day

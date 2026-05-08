@@ -31,6 +31,7 @@ rsync -rlptD --no-owner --no-group --no-perms --verbose --delete \
     --exclude='.*' \
     --exclude='**/__pycache__/' \
     --exclude='tmp/' \
+    --exclude='data/' \
     ${GITIGNORE_EXCLUDES} \
     --include='mcp-remote.iml' \
     --exclude='*.iml' \

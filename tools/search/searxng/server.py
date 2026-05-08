@@ -94,7 +94,7 @@ def _format_results(
 async def search(
         ctx: Context,
         query: str,
-        search_engines: List[str],
+        search_engines: List[str] = SC.DEFAULT_SEARCH_ENGINES,
         time_range: Optional[str] = None,
         language: Optional[str] = "en-US",
         limit: Optional[int] = None

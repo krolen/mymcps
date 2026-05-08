@@ -23,6 +23,8 @@ class SearchConstants:
         "year": "y"
     }
 
+    DEFAULT_SEARCH_ENGINES = ["google", "duckduckgo", "bing", "brave"]
+
     # Engine definitions
     ENGINES = {
         "google": {
