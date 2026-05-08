@@ -16,16 +16,17 @@ QUARANTINE_DB = Path("data/quarantine.db").absolute()
 class SearxSpaceManager:
     def __init__(self):
         logger.info(f"Initializing SearxSpaceManager in process {os.getpid()}")
-        self.instances_data: Optional[SearxSpaceData] = None
-        self.last_updated = 0.0
         self.refresh_interval = 9000  # 15 minutes
         self._init_db()
 
     def _init_db(self):
-        """Initialize the SQLite database for quarantine."""
+        """Initialize the SQLite database for quarantine and cache."""
         with sqlite3.connect(QUARANTINE_DB) as conn:
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS quarantine (url TEXT PRIMARY KEY, until REAL)"
+            )
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS cache (key TEXT PRIMARY KEY, value TEXT, timestamp REAL)"
             )
             conn.commit()
 
@@ -48,17 +49,51 @@ class SearxSpaceManager:
             response = await client.get("https://searx.space/data/instances.json")
             response.raise_for_status()
             data = response.json()
-            self.instances_data = SearxSpaceData(**data)
-            self.last_updated = time.time()
+
+            # Save to DB
+            with sqlite3.connect(QUARANTINE_DB) as conn:
+                conn.execute(
+                    "INSERT OR REPLACE INTO cache (key, value, timestamp) VALUES (?, ?, ?)",
+                    ("instances", json.dumps(data), time.time()),
+                )
+                conn.commit()
+
             logger.info("SearXNG instance list refreshed successfully")
         except Exception as e:
             logger.error(f"Failed to refresh SearXNG instances: {e}")
-            # We do not fail if retrieval fails, as per user request
 
     async def get_instances(self) -> SearxSpaceData:
-        if self.instances_data is None or (time.time() - self.last_updated > self.refresh_interval):
-            await self.refresh_instances()
-        return self.instances_data
+        now = time.time()
+
+        # Check cache in DB
+        try:
+            with sqlite3.connect(QUARANTINE_DB) as conn:
+                row = conn.execute(
+                    "SELECT value, timestamp FROM cache WHERE key = ?", ("instances",)
+                ).fetchone()
+
+                if row:
+                    value, timestamp = row
+                    if now - timestamp < self.refresh_interval:
+                        return SearxSpaceData(**json.loads(value))
+        except Exception as e:
+            logger.error(f"Error reading cache from DB: {e}")
+
+        await self.refresh_instances()
+
+        # Return from DB after refresh
+        try:
+            with sqlite3.connect(QUARANTINE_DB) as conn:
+                row = conn.execute(
+                    "SELECT value FROM cache WHERE key = ?", ("instances",)
+                ).fetchone()
+                if row:
+                    return SearxSpaceData(**json.loads(row[0]))
+        except Exception as e:
+            logger.error(f"Error reading cache from DB after refresh: {e}")
+
+        # Fallback if everything fails (should not happen usually)
+        return SearxSpaceData(instances={})
 
     def quarantine_instance(self, url: str, duration_hours: float):
         """Move instance to quarantine for a specified duration"""
@@ -68,11 +103,30 @@ class SearxSpaceManager:
 
     def get_best_instances(self, engines: List[str], count: int = 3) -> List[str]:
         """Find the best instances that support the required engines"""
-        if not self.instances_data:
+        # Now we must call get_instances asynchronously to get the data
+        # However, get_best_instances is synchronous.
+        # To maintain the signature, we'll read from DB directly.
+
+        now = time.time()
+        instances_data = None
+
+        try:
+            with sqlite3.connect(QUARANTINE_DB) as conn:
+                row = conn.execute(
+                    "SELECT value, timestamp FROM cache WHERE key = ?", ("instances",)
+                ).fetchone()
+                if row:
+                    value, timestamp = row
+                    # We allow a slightly stale cache here to avoid blocking,
+                    # but get_instances() handles the actual refresh.
+                    instances_data = SearxSpaceData(**json.loads(value))
+        except Exception as e:
+            logger.error(f"Failed to load instances from DB in get_best_instances: {e}")
+
+        if not instances_data:
             return []
 
         # Get quarantined instances from DB
-        now = time.time()
         quarantine_cache = {}
         try:
             with sqlite3.connect(QUARANTINE_DB) as conn:
@@ -83,7 +137,7 @@ class SearxSpaceManager:
             logger.error(f"Failed to load quarantine from DB: {e}")
 
         candidates = []
-        for url, info in self.instances_data.instances.items():
+        for url, info in instances_data.instances.items():
             # Filter out quarantined instances
             if url in quarantine_cache:
                 continue
