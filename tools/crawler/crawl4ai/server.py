@@ -58,9 +58,8 @@ mcp = FastMCP(name="crawl4ai-crawler", lifespan=lifespan)
 )
 async def crawl_url(ctx: Context, url: str, extract_markdown: bool = True, session_id: str = None) -> str:
     """
-    Crawl a URL and extract its content using stealth configurations. Can be used to perform a quick duckduckgo search:
-    Example: search for latest news in Toronto: https://html.duckduckgo.com/html/?q=latest+Toronto+news&df={df}.
-    The latest parameter can be used to constrain time: df:d mean last day, qf:w - last week, month etc
+    Crawl a specific URL and extract its content using stealth configurations.
+    Use this tool when you already have a target URL and need its markdown or HTML content for analysis.
 
     Args:
         url: The URL to crawl.

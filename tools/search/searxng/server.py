@@ -100,7 +100,8 @@ async def search(
         limit: Optional[int] = None
 ) -> dict:
     """
-    Perform a web search using SearXNG.
+    Perform a comprehensive web search using SearXNG to find relevant URLs and snippets.
+    Use this tool when you need to find information, discover new URLs, or perform a broad search across multiple engines.
 
     While providing specific search engines is optional, specifying engines (e.g., 'reddit', 'google', 'bing')
     can significantly improve result quality for specific needs.
@@ -113,7 +114,7 @@ async def search(
         :param query: The search query.
         :param search_engines: Optional list of specific engines to use. Providing targeted engines
                                can improve result quality. You can discover available engines
-                               via the 'web_searxng_list_engines' tool.
+                               via the 'web_search_engines' tool.
         :param time_range: Filter results by time (day, week, month, year). Works best with
                            engines that support time-based filtering.
         :param limit: Max number of results to return.
