@@ -89,7 +89,7 @@ def _format_results(
 
 
 @mcp.tool(
-    name="web_searxng_search"
+    name="web_search"
 )
 async def search(
         ctx: Context,
@@ -100,23 +100,22 @@ async def search(
         limit: Optional[int] = None
 ) -> dict:
     """
-    Perform a search using SearXNG.
+    Perform a web search using SearXNG.
 
-    CRITICAL DEPENDENCY: To get accurate, time-sensitive data, you MUST FIRST call 
-    'web_searxng_list_engines' to identify which my_search_engines are available and which
-    ones support 'time_range'.
-    
-    If you provide a 'time_range' without specifying 'my_search_engines', this tool 
-    will return an error because general defaults often ignore time filters.
+    While providing specific search engines is optional, specifying engines (e.g., 'reddit', 'google', 'bing')
+    can significantly improve result quality for specific needs.
+
+    The time_range feature (day, week, month, year) is available to filter results, and it typically
+    works best when combined with specific engines that support time-based filtering.
 
     Args:
         :param ctx: The MCP context.
         :param query: The search query.
-        :param search_engines: List of specific engines to use. (REQUIRED if time_range is used).
-                           Obtain the valid list of engines and their capabilities 
-                           by calling the 'web_searxng_list_engines' tool.
-        :param time_range: Filter results by time (day, week, month, year).
-                    Only works for engines where 'supports_time_range' is True.
+        :param search_engines: Optional list of specific engines to use. Providing targeted engines
+                               can improve result quality. You can discover available engines
+                               via the 'web_searxng_list_engines' tool.
+        :param time_range: Filter results by time (day, week, month, year). Works best with
+                           engines that support time-based filtering.
         :param limit: Max number of results to return.
         :param language: Ask to return results in certain language
     """
@@ -168,13 +167,15 @@ async def search(
 
 
 @mcp.tool(
-    name="web_searxng_list_engines"
+    name="web_search_engines"
 )
 async def list_available_engines() -> dict:
     """
-    Returns a comprehensive list of search engines, their descriptions, 
-    the categories they cover, and whether they support time-based filtering.
-    The LLM should use this to pick the best engine for a specific query.
+    Discover available search engines and their capabilities, including descriptions,
+    categories they cover, and whether they support time-range filtering.
+
+    Use this tool to identify the best search engines for your specific needs and
+    optimize the 'search_engines' parameter when calling the 'web_search' tool.
     """
     return {
         "engines": {
