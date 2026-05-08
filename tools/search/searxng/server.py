@@ -97,14 +97,17 @@ async def search(
         search_engines: List[str] = SC.DEFAULT_SEARCH_ENGINES,
         time_range: Optional[str] = None,
         language: Optional[str] = "en-US",
-        limit: Optional[int] = None
+        limit: Optional[int] = 20
 ) -> dict:
     """
     **WORKFLOW: Execution Phase.** Perform a web search using SearXNG to find URLs and snippets.
 
-    - **General Search (Wide Info):** To obtain a broad amount of information or perform general discovery, call this tool **without** the `search_engines` parameter. (Note: Engines are not required for a general search; omitting them triggers a wide-net search).
-    - **Precise Search (Targeted Info):** To be more precise with general data or find specialized information, first use `web_search_engines` to identify the best tools, then pass those specific engines into the `search_engines` parameter.
-    - **Time Filtering:** Use `time_range` (day, week, month, year) to filter results. 
+    - **General Search (Wide-Net):** To obtain the most comprehensive results, you MUST leave the search_engines parameter empty.
+      ⚠️ CRITICAL: Do NOT manually specify general-purpose engines (e.g., 'google', 'brave', 'bing') in this parameter. Doing so transforms the request into a "Restricted Search," which disables the wide-net optimization and will likely result in fewer or lower-quality results.
+
+    - **Precise Search (Targeted Info):** Use the search_engines parameter ONLY for non-general sources (e.g., 'wikipedia', 'reddit', 'arxiv') discovered via webSearchEngines. Use this only when a general search has failed or when you require a specific domain's perspective.
+
+    - **Time Filtering:** Use `time_range` (day, week, month, year) to filter results.
       **IMPORTANT:** Use time filtering ONLY with engines that support it. If you need to search across both engines that support and don't support time filtering while still applying the filter to the supported ones, you MUST split the operation into two separate search calls.
 
     Args:
