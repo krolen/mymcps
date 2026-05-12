@@ -13,6 +13,7 @@ from fastmcp import FastMCP, Context
 
 from tools.crawler.constants import CRAWL4AI_SERVER_URL
 from tools.crawler.crawl4ai.client import Crawl4AIClient
+from tools.common.health_logger import health_logger
 
 CRAWL_SEMAPHORE = asyncio.Semaphore(10)
 
@@ -74,7 +75,11 @@ async def crawl_url(ctx: Context, url: str, extract_markdown: bool = True, sessi
     result = await client.crawl_single_url(url, False, session_id)
 
     if not is_success(result):
-        return f"Error crawling {url}: {get_error(result)}"
+        error_msg = get_error(result)
+        health_logger.log_event('crawl', url, 'error', error_msg)
+        return f"Error crawling {url}: {error_msg}"
+    
+    health_logger.log_event('crawl', url, 'success')
 
     if extract_markdown:
         return get_markdown_content(result)
@@ -102,9 +107,12 @@ async def crawl_multiple_urls(ctx: Context, urls: list[str], session_id: str = N
     output = {}
     for url, result in zip(urls, results):
         if is_success(result):
+            health_logger.log_event('crawl', url, 'success')
             output[url] = get_markdown_content(result)
         else:
-            output[url] = f"Error: {get_error(result)}"
+            error_msg = get_error(result)
+            health_logger.log_event('crawl', url, 'error', error_msg)
+            output[url] = f"Error: {error_msg}"
 
     return output
 

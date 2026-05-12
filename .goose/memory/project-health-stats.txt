@@ -1,0 +1,20 @@
+
+    Feature: Search and Crawl Health Statistics System
+    Project: MCPServers-local
+    Storage: ClickHouse (NAS)
+    
+    Technical Decisions:
+    - Used ClickHouse for native Grafana integration and automatic data retention (TTL).
+    - Implemented Asynchronous Inserts (async_insert=1) to handle low-load NAS writes efficiently.
+    - Data retention set to 1 month via ClickHouse TTL.
+    
+    Implementation Details:
+    - Utility: Created 'tools/common/health_logger.py' as the central logging interface.
+    - Search Integration: Updated 'tools/search/searxng/server.py' to log status ('success', 'blocked', 'error') per engine.
+    - Crawl Integration: Updated 'tools/crawler/crawl4ai/server.py' to log crawl results per URL.
+    - DB Schema: Table 'my_data.health_logs' with columns [timestamp, component, engine_or_domain, status, detail].
+    
+    UI Strategy:
+    - Use Grafana with ClickHouse plugin to monitor block rates and crawl failures in real-time.
+  
+

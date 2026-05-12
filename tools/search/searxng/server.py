@@ -14,6 +14,7 @@ from fastmcp import FastMCP, Context
 from tools.search.constants import SearchConstants as SC
 from tools.search.models import SearchResult
 from tools.search.searxng.registry import ENGINE_REGISTRY
+from tools.common.health_logger import health_logger
 
 # Initialize FastMCP server
 mcp = FastMCP(
@@ -151,14 +152,17 @@ async def search(
 
     if tasks:
         results_lists = await asyncio.gather(*tasks, return_exceptions=True)
-        for result_list in results_lists:
+        for engine_name, result_list in zip(ENGINE_REGISTRY.keys(), results_lists):
             if isinstance(result_list, list):
+                health_logger.log_event('search', engine_name, 'success')
                 for r in result_list:
                     if r.url and r.url not in seen_urls:
                         all_results.append(r)
                         seen_urls.add(r.url)
             else:
-                logger.error(f"Error during polymorphic search: {result_list}")
+                status = 'blocked' if 'captcha' in str(result_list).lower() or '403' in str(result_list) else 'error'
+                health_logger.log_event('search', engine_name, status, str(result_list))
+                logger.error(f"Error during polymorphic search for {engine_name}: {result_list}")
 
 
     return _format_results(

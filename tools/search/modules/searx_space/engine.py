@@ -4,6 +4,7 @@ from typing import List, Set
 
 import httpx
 
+from tools.common.health_logger import health_logger
 from tools.search.constants import SearchConstants
 from tools.search.models import SearchResult, SearchEngine
 from .browser_client import get_browser_session, get_browser_session_with_proxy
@@ -39,6 +40,7 @@ class SearxSpaceEngine(SearchEngine):
 
         if not candidates:
             logger.warning("No instances found that support any of the requested engines")
+            health_logger.log_event("search", "searx_space", "error", "No instances found")
             return []
 
         logger.info(f"Candidate instances for query '{cleaned_query}': {', '.join(candidates)}")
@@ -56,6 +58,7 @@ class SearxSpaceEngine(SearchEngine):
                             all_results.append(res)
                             seen_urls.add(res.url)
                     success_count += 1
+                    health_logger.log_event("search", instance_url, "success", f"Found {len(results)} results")
             except Exception as e:
                 response = getattr(e, 'response', None)
                 status_code = getattr(response, 'status_code', None)
@@ -63,13 +66,16 @@ class SearxSpaceEngine(SearchEngine):
                     logger.warning(
                         f"Instance {instance_url} returned 429 (Too Many Requests). Quarantining for 2 hours.")
                     self.manager.quarantine_instance(instance_url, 2)
+                    health_logger.log_event("search", instance_url, "blocked", "429 Too Many Requests")
                 else:
                     logger.warning(
                         f"Instance {instance_url} failed ({type(e).__name__}: {e}). Quarantining for 24 hours.")
                     self.manager.quarantine_instance(instance_url, 24)
+                    health_logger.log_event("search", instance_url, "error", str(e))
 
         # 3. Join results: sort by score and apply limit
         all_results.sort(key=lambda x: x.score, reverse=True)
+        
         limit_ : str | int = params.get("limit")
         if limit_ is not None:
             return all_results[:int(limit_)]

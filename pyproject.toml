@@ -8,9 +8,10 @@ dependencies = [
     "httpx==0.28.1",
     "requests==2.33.1",
     "crawl4ai==0.8.6",
-    "pydantic==2.13.3",
+    "pydantic==2.13.4",
     "beautifulsoup4==4.14.3",
     "curl-cffi==0.15.0",
+    "clickhouse-driver==0.2.10",
 ]
 
 [dependency-groups]
