@@ -11,10 +11,10 @@ from typing import Optional, List
 
 from fastmcp import FastMCP, Context
 
+from tools.common.health_logger import health_logger
 from tools.search.constants import SearchConstants as SC
 from tools.search.models import SearchResult
 from tools.search.searxng.registry import ENGINE_REGISTRY
-from tools.common.health_logger import health_logger
 
 # Initialize FastMCP server
 mcp = FastMCP(
@@ -163,7 +163,6 @@ async def search(
                 status = 'blocked' if 'captcha' in str(result_list).lower() or '403' in str(result_list) else 'error'
                 health_logger.log_event('search', engine_name, status, str(result_list))
                 logger.error(f"Error during polymorphic search for {engine_name}: {result_list}")
-
 
     return _format_results(
         query=query,

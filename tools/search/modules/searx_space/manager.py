@@ -1,17 +1,18 @@
-import time
-import logging
 import json
+import logging
 import os
 import sqlite3
+import time
 from pathlib import Path
-from typing import List, Optional
-from pydantic import ValidationError
+from typing import List
+
 from tools.common.http_client import get_client
 from .models import SearxSpaceData
 
 logger = logging.getLogger(__name__)
 
 QUARANTINE_DB = Path("data/quarantine.db").absolute()
+
 
 class SearxSpaceManager:
     def __init__(self):

@@ -1,12 +1,14 @@
-import os
 import logging
+import os
 from typing import Optional
+
 from curl_cffi.requests import AsyncSession
 
 logger = logging.getLogger(__name__)
 
 _session: Optional[AsyncSession] = None
 _proxy_session: Optional[AsyncSession] = None
+
 
 async def get_browser_session() -> AsyncSession:
     """
@@ -17,6 +19,7 @@ async def get_browser_session() -> AsyncSession:
         # Impersonating Chrome allows bypassing many bot detection systems
         _session = AsyncSession(impersonate="chrome120", timeout=10.0, allow_redirects=False)
     return _session
+
 
 async def get_browser_session_with_proxy() -> AsyncSession:
     """
@@ -33,6 +36,7 @@ async def get_browser_session_with_proxy() -> AsyncSession:
         _proxy_session = AsyncSession(impersonate="chrome120", proxy=proxy, timeout=10.0, allow_redirects=False)
 
     return _proxy_session
+
 
 async def close_browser_session():
     """

@@ -5,9 +5,9 @@ from urllib.parse import urlparse
 
 from crawl4ai import BrowserConfig, CrawlerRunConfig, PruningContentFilter, DefaultMarkdownGenerator, ProxyConfig
 from crawl4ai.docker_client import Crawl4aiDockerClient
-from platformdirs import user_data_dir
 
 from tools.crawler.constants import DEFAULT_CONFIG, DOMAIN_CONFIGS
+
 
 class TimeoutResult:
     success = False

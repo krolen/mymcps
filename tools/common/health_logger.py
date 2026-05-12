@@ -1,11 +1,13 @@
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Literal
 from threading import Lock
+from typing import Literal
+
 from clickhouse_driver import Client
 
 logger = logging.getLogger("health_logger")
+
 
 class HealthLogger:
     def __init__(self):
@@ -16,11 +18,11 @@ class HealthLogger:
         except ValueError:
             logger.error("Invalid CLICKHOUSE_PORT environment variable. Falling back to 9000.")
             self.port = 9000
-            
+
         self.user = os.getenv("CLICKHOUSE_USER", "user")
         self.password = os.getenv("CLICKHOUSE_PASSWORD", "password")
         self.table = os.getenv("CLICKHOUSE_TABLE", "my_data.health_logs")
-        
+
         self._client = None
         self._lock = Lock()
 
@@ -33,14 +35,15 @@ class HealthLogger:
                         port=self.port,
                         user=self.user,
                         password=self.password,
-                        settings={'async_insert': 1} # Server-side async insert to protect NAS
+                        settings={'async_insert': 1}  # Server-side async insert to protect NAS
                     )
                 except Exception as e:
                     logger.error(f"Failed to connect to ClickHouse: {e}")
                     return None
             return self._client
 
-    def log_event(self, component: Literal['search', 'crawl'], engine_or_domain: str, status: Literal['success', 'blocked', 'error'], detail: str = ""):
+    def log_event(self, component: Literal['search', 'crawl'], engine_or_domain: str,
+                  status: Literal['success', 'blocked', 'error'], detail: str = ""):
         """
         Logs a health event to ClickHouse.
         component: 'search' or 'crawl'
@@ -63,6 +66,7 @@ class HealthLogger:
             # Reset client on connection error to trigger reconnect next time
             with self._lock:
                 self._client = None
+
 
 # Global instance for easy import
 health_logger = HealthLogger()

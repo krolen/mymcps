@@ -1,4 +1,5 @@
 from bs4 import BeautifulSoup
+
 from tools.search.models import SearchResult, SearXNGResponse
 
 

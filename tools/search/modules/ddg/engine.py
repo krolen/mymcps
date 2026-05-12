@@ -3,9 +3,9 @@ import os
 import re
 import urllib.parse
 from typing import List, Optional
+
 from fastmcp import Context
-from tools.search.models import SearchResult
-from tools.search.constants import SearchConstants as SC
+
 from tools.common.http_client import get_client
 from tools.common.markdown_utils import (
     RESULT_SPLIT_PATTERN,
@@ -13,8 +13,11 @@ from tools.common.markdown_utils import (
     URL_PATTERN,
     clean_markdown_snippet
 )
+from tools.search.constants import SearchConstants as SC
+from tools.search.models import SearchResult
 
 logger = logging.getLogger("ddg_search")
+
 
 async def _parse_search_results_jina(content: str, limit: int) -> List[SearchResult]:
     """Parse search results from Jina AI content."""
@@ -200,5 +203,3 @@ async def search(ctx: Context, query: str, time_range: Optional[str] = None, lim
     except Exception as e:
         logger.error(f"Error searching DDG via Jina AI: {e}")
         return []
-
-

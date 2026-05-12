@@ -1,8 +1,5 @@
 import logging
-import asyncio
 from typing import List, Set
-
-import httpx
 
 from tools.common.health_logger import health_logger
 from tools.search.constants import SearchConstants
@@ -75,8 +72,8 @@ class SearxSpaceEngine(SearchEngine):
 
         # 3. Join results: sort by score and apply limit
         all_results.sort(key=lambda x: x.score, reverse=True)
-        
-        limit_ : str | int = params.get("limit")
+
+        limit_: str | int = params.get("limit")
         if limit_ is not None:
             return all_results[:int(limit_)]
         return all_results
@@ -145,7 +142,8 @@ class SearxSpaceEngine(SearchEngine):
                 return parsed
 
         if response:
-            logger.warning(f"JSON search failed with status {response.status_code} on {instance_url}, falling back to HTML")
+            logger.warning(
+                f"JSON search failed with status {response.status_code} on {instance_url}, falling back to HTML")
         else:
             logger.warning(f"JSON search returned no response on {instance_url}, falling back to HTML")
 

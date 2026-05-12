@@ -1,5 +1,4 @@
 import re
-from typing import Optional
 
 # Pre-compiled regex patterns for efficiency
 RESULT_SPLIT_PATTERN = re.compile(r'\n##\s+\[')
@@ -11,6 +10,7 @@ CONTENT_LINK_PATTERN = re.compile(r'\[(.*?)\]\(https?://.*?\)', re.DOTALL)
 MD_LINK_PATTERN = re.compile(r'\[.*?\]\(.*?\)')
 MD_IMAGE_PATTERN = re.compile(r'!\[.*?\]\(.*?\)')
 TIMESTAMP_PATTERN = re.compile(r'\d{4}-\d{2}-\d{2}T.*$')
+
 
 def clean_markdown_snippet(snippet: str) -> str:
     """

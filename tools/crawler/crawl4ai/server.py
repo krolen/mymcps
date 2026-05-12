@@ -11,9 +11,9 @@ from contextlib import asynccontextmanager
 from crawl4ai.docker_client import Crawl4aiDockerClient
 from fastmcp import FastMCP, Context
 
+from tools.common.health_logger import health_logger
 from tools.crawler.constants import CRAWL4AI_SERVER_URL
 from tools.crawler.crawl4ai.client import Crawl4AIClient
-from tools.common.health_logger import health_logger
 
 CRAWL_SEMAPHORE = asyncio.Semaphore(10)
 
@@ -78,7 +78,7 @@ async def crawl_url(ctx: Context, url: str, extract_markdown: bool = True, sessi
         error_msg = get_error(result)
         health_logger.log_event('crawl', url, 'error', error_msg)
         return f"Error crawling {url}: {error_msg}"
-    
+
     health_logger.log_event('crawl', url, 'success')
 
     if extract_markdown:

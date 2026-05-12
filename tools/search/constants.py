@@ -1,5 +1,3 @@
-from typing import Dict, List, Any
-
 class SearchConstants:
     # SearXNG Configuration
     SEARXNG_URL = "http://192.168.0.100:8089"

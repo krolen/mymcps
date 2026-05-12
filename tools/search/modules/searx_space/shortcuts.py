@@ -1,6 +1,7 @@
 from enum import Enum
 from typing import List, Tuple
 
+
 class SearchEngineShortcut(Enum):
     GOOGLE = "!g"
     BING = "!bi"
@@ -52,6 +53,7 @@ class SearchEngineShortcut(Enum):
             cls.YOUTUBE.value: "youtube",
         }
         return mapping.get(shortcut, "general")
+
 
 def parse_shortcuts(query: str) -> Tuple[List[str], str]:
     """
