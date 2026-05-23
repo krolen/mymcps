@@ -13,7 +13,7 @@ from fastmcp import FastMCP, Context
 
 from tools.common.health_logger import health_logger
 from tools.search.constants import SearchConstants as SC
-from tools.search.models import SearchResult
+from tools.search.models import SearchResult, WebSearchResponse
 from tools.search.searxng.registry import ENGINE_REGISTRY
 
 # Initialize FastMCP server
@@ -66,7 +66,7 @@ def _format_results(
         search_time: Optional[float] = None,
         fallback: bool = False,
         error: Optional[str] = None
-) -> dict:
+) -> WebSearchResponse:
     """Helper to sort, slice, and format search results."""
     sorted_results = sorted(
         all_results,
@@ -75,18 +75,15 @@ def _format_results(
     )
     final_results = sorted_results[:limit] if limit is not None else sorted_results
 
-    res = {
-        "query": query,
-        "result_count": len(final_results),
-        "results": [r.model_dump() for r in final_results],
-        "search_time": search_time,
-        "engines_used": list(set([r.engine for r in final_results]))
-    }
-    if fallback:
-        res["fallback"] = True
-    if error:
-        res["error"] = error
-    return res
+    return WebSearchResponse(
+        query=query,
+        result_count=len(final_results),
+        results=final_results,
+        search_time=search_time,
+        engines_used=list(set([r.engine for r in final_results])),
+        fallback=fallback if fallback else None,
+        error=error
+    )
 
 
 @mcp.tool(
@@ -99,7 +96,7 @@ async def search(
         time_range: Optional[str] = None,
         language: Optional[str] = "en-US",
         limit: Optional[int] = 20
-) -> dict:
+) -> WebSearchResponse:
     """
     **WORKFLOW: Execution Phase.** Perform a web search using SearXNG to find URLs and snippets.
 
@@ -125,7 +122,14 @@ async def search(
     # 1. Validate time_range and filter engines
     valid_engines, error_res = _validate_and_filter_engines(search_engines, time_range)
     if error_res:
-        return error_res
+        return WebSearchResponse(
+            query=query,
+            result_count=0,
+            results=[],
+            engines_used=[],
+            error=error_res.get("error"),
+            instruction=error_res.get("instruction")
+        )
     search_engines = valid_engines
 
     params = {
@@ -169,6 +173,7 @@ async def search(
         all_results=all_results,
         limit=limit
     )
+
 
 
 @mcp.tool(

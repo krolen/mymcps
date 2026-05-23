@@ -7,6 +7,7 @@ functionality using the crawl4ai library.
 
 import asyncio
 from contextlib import asynccontextmanager
+from typing import List, Optional
 
 from crawl4ai.docker_client import Crawl4aiDockerClient
 from fastmcp import FastMCP, Context
@@ -14,6 +15,7 @@ from fastmcp import FastMCP, Context
 from tools.common.health_logger import health_logger
 from tools.crawler.constants import CRAWL4AI_SERVER_URL
 from tools.crawler.crawl4ai.client import Crawl4AIClient
+from tools.crawler.models import CrawlResult, CrawlResponse
 
 CRAWL_SEMAPHORE = asyncio.Semaphore(10)
 
@@ -57,7 +59,7 @@ mcp = FastMCP(name="crawl4ai-crawler", lifespan=lifespan)
 @mcp.tool(
     name="web_crawl_url"
 )
-async def crawl_url(ctx: Context, url: str, extract_markdown: bool = True, session_id: str = None) -> str:
+async def crawl_url(ctx: Context, url: str, extract_markdown: bool = True, session_id: str | None = None) -> CrawlResult:
     """
     Crawl a specific URL and extract its content using stealth configurations.
     Use this tool when you already have a target URL and need its markdown or HTML content for analysis.
@@ -77,20 +79,27 @@ async def crawl_url(ctx: Context, url: str, extract_markdown: bool = True, sessi
     if not is_success(result):
         error_msg = get_error(result)
         health_logger.log_event('crawl', url, 'error', error_msg)
-        return f"Error crawling {url}: {error_msg}"
+        return CrawlResult(
+            url=url,
+            content="",
+            success=False,
+            error=error_msg
+        )
 
     health_logger.log_event('crawl', url, 'success')
 
-    if extract_markdown:
-        return get_markdown_content(result)
-    else:
-        return get_html_content(result)
+    content = get_markdown_content(result) if extract_markdown else get_html_content(result)
+    return CrawlResult(
+        url=url,
+        content=content,
+        success=True
+    )
 
 
 @mcp.tool(
     name="web_crawl_multiple_urls"
 )
-async def crawl_multiple_urls(ctx: Context, urls: list[str], session_id: str = None) -> dict[str, str]:
+async def crawl_multiple_urls(ctx: Context, urls: list[str], session_id: str = None) -> CrawlResponse:
     """
     Crawl multiple URLs in parallel (respecting the global concurrency limit).
 
@@ -104,17 +113,27 @@ async def crawl_multiple_urls(ctx: Context, urls: list[str], session_id: str = N
     tasks = [crawler.crawl_single_url(url, False, session_id) for url in urls]
     results = await asyncio.gather(*tasks)
 
-    output = {}
+    crawl_results = []
     for url, result in zip(urls, results):
         if is_success(result):
             health_logger.log_event('crawl', url, 'success')
-            output[url] = get_markdown_content(result)
+            content = get_markdown_content(result)
+            crawl_results.append(CrawlResult(
+                url=url,
+                content=content,
+                success=True
+            ))
         else:
             error_msg = get_error(result)
             health_logger.log_event('crawl', url, 'error', error_msg)
-            output[url] = f"Error: {error_msg}"
+            crawl_results.append(CrawlResult(
+                url=url,
+                content="",
+                success=False,
+                error=error_msg
+            ))
 
-    return output
+    return CrawlResponse(results=crawl_results)
 
 
 # Removed redundant deep_merge as it is now part of Crawl4AIClient._deep_merge

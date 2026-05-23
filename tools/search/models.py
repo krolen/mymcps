@@ -12,6 +12,17 @@ class SearchResult(BaseModel):
     engine: str = "unknown"
 
 
+class WebSearchResponse(BaseModel):
+    query: str = ""
+    result_count: int = 0
+    results: List[SearchResult] = []
+    search_time: Optional[float] = None
+    engines_used: List[str] = []
+    fallback: Optional[bool] = None
+    error: Optional[str] = None
+    instruction: Optional[str] = None
+
+
 class SearXNGResponse(BaseModel):
     query: str
     results: List[SearchResult]
