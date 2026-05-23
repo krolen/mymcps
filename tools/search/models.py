@@ -8,8 +8,15 @@ class SearchResult(BaseModel):
     title: str = ""
     url: str
     content: str = ""
-    score: float = 1.0
+    score: float = 0.01
     engine: str = "unknown"
+
+
+class SearXNGResponse(BaseModel):
+    query: str
+    results: List[SearchResult]
+    unresponsive_engines: List[List[str]] = []
+    search_time: Optional[float] = None
 
 
 class SearchEngine(ABC):
@@ -19,10 +26,3 @@ class SearchEngine(ABC):
         Perform a search and return a list of SearchResult objects.
         """
         pass
-
-
-class SearXNGResponse(BaseModel):
-    query: str
-    results: List[SearchResult]
-    unresponsive_engines: List[List[str]] = []
-    search_time: Optional[float] = None
