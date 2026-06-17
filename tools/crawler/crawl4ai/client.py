@@ -1,10 +1,12 @@
 import asyncio
 import os
 import random
+from typing import List
 from urllib.parse import urlparse
 
 from crawl4ai import BrowserConfig, CrawlerRunConfig, PruningContentFilter, DefaultMarkdownGenerator, ProxyConfig
 from crawl4ai.docker_client import Crawl4aiDockerClient
+from tools.crawler.models import RequestStatus, BrowserStatus
 
 from tools.crawler.constants import DEFAULT_CONFIG, DOMAIN_CONFIGS
 
@@ -139,3 +141,36 @@ class Crawl4AIClient:
                 return TimeoutResult()
             except Exception as e:
                 return ErrorResult(str(e))
+
+    async def list_active_requests(self, status: str = "active") -> List[RequestStatus]:
+        """List active and completed requests."""
+        try:
+            response = await self.client._request("GET", f"/monitor/requests?status={status}")
+            data = response.json()
+            # Assuming the server returns a list of requests directly or in a 'data' field
+            requests = data if isinstance(data, list) else data.get("data", [])
+            return [RequestStatus(**r) for r in requests]
+        except Exception as e:
+            print(f"Error listing active requests: {e}")
+            return []
+
+    async def list_browsers(self) -> List[BrowserStatus]:
+        """Get detailed browser pool information."""
+        try:
+            response = await self.client._request("GET", "/monitor/browsers")
+            data = response.json()
+            # API returns {"browsers": [...], "summary": {...}}
+            browsers_data = data.get("browsers", []) if isinstance(data, dict) else data
+            return [BrowserStatus(**b) for b in browsers_data]
+        except Exception as e:
+            print(f"Error listing browsers: {e}")
+            return []
+
+    async def kill_browser(self, sig: str) -> bool:
+        """Kill a specific browser by signature."""
+        try:
+            response = await self.client._request("POST", "/monitor/actions/kill_browser", json={"sig": sig})
+            return response.json().get("success", False)
+        except Exception as e:
+            print(f"Error killing browser {sig}: {e}")
+            return False

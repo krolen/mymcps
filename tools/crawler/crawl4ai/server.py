@@ -16,6 +16,7 @@ from fastmcp import FastMCP, Context
 from tools.common.health_logger import health_logger
 from tools.crawler.constants import CRAWL4AI_SERVER_URL
 from tools.crawler.crawl4ai.client import Crawl4AIClient
+from tools.crawler.crawl4ai.cleanup import run_cleanup_loop
 from tools.crawler.models import CrawlResult, CrawlResponse
 
 CRAWL_SEMAPHORE = asyncio.Semaphore(10)
@@ -44,13 +45,26 @@ def get_html_content(result) -> str:
     return getattr(result, 'html', 'No HTML content available')
 
 
+
 @asynccontextmanager
 async def lifespan(app: FastMCP):
     print("LIFESPAN STARTING")
     async with Crawl4aiDockerClient(base_url=CRAWL4AI_SERVER_URL) as client:
         print("CLIENT READY:", client)
         crawler = Crawl4AIClient(client)
-        yield {"crawler": crawler}
+        
+        # Start background cleanup task
+        bg_task = asyncio.create_task(run_cleanup_loop(crawler))
+        try:
+            yield {"crawler": crawler}
+        finally:
+            # Stop background task on shutdown, ensuring it happens even on error
+            bg_task.cancel()
+            try:
+                await bg_task
+            except asyncio.CancelledError:
+                pass
+            
     print("LIFESPAN SHUTDOWN")
 
 
