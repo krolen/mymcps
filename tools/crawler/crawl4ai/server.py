@@ -6,6 +6,7 @@ functionality using the crawl4ai library.
 """
 
 import asyncio
+import uuid
 from contextlib import asynccontextmanager
 from typing import List, Optional
 
@@ -110,11 +111,27 @@ async def crawl_multiple_urls(ctx: Context, urls: list[str], session_id: str = N
     """
     crawler = ctx.lifespan_context["crawler"]
 
-    tasks = [crawler.crawl_single_url(url, False, session_id) for url in urls]
-    results = await asyncio.gather(*tasks)
+    # Initialize a pool of 5 session IDs
+    session_pool = asyncio.Queue()
+    for _ in range(5):
+        session_pool.put_nowait(str(uuid.uuid4()))
+
+    async def crawl_with_session(url: str):
+        # Acquire a session ID from the pool
+        sid = await session_pool.get()
+        try:
+            result = await crawler.crawl_single_url(url, False, sid)
+            return url, result
+        finally:
+            # Return the session ID to the pool
+            session_pool.put_nowait(sid)
+
+    # Process all URLs using the pool
+    tasks = [crawl_with_session(url) for url in urls]
+    all_results = await asyncio.gather(*tasks)
 
     crawl_results = []
-    for url, result in zip(urls, results):
+    for url, result in all_results:
         if is_success(result):
             health_logger.log_event('crawl', url, 'success')
             content = get_markdown_content(result)

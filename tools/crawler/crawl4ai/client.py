@@ -88,7 +88,7 @@ class Crawl4AIClient:
             user_agent=actual_user_agent,
             extra_args=browser_settings.get("args", []),
             browser_type=browser_settings.get("browser_settings", "chromium"),
-            text_mode=True,
+            text_mode=browser_settings.get("text_mode"),
             proxy_config=proxy_config,
         )
 
