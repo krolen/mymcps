@@ -1,10 +1,11 @@
 import asyncio
-import os
+import ipaddress
 import random
+import socket
 from typing import List
 from urllib.parse import urlparse
 
-from crawl4ai import BrowserConfig, CrawlerRunConfig, PruningContentFilter, DefaultMarkdownGenerator, ProxyConfig
+from crawl4ai import BrowserConfig, CrawlerRunConfig, PruningContentFilter, DefaultMarkdownGenerator
 from crawl4ai.docker_client import Crawl4aiDockerClient
 from tools.crawler.models import RequestStatus, BrowserStatus
 
@@ -25,8 +26,10 @@ class ErrorResult:
 
 
 class Crawl4AIClient:
-    def __init__(self, docker_client: Crawl4aiDockerClient):
+    def __init__(self, docker_client: Crawl4aiDockerClient, api_token: str | None = None):
         self.client = docker_client
+        if api_token:
+            self.client._http_client.headers["Authorization"] = f"Bearer {api_token}"
         self.semaphore = asyncio.Semaphore(10)
 
     @staticmethod
@@ -49,7 +52,41 @@ class Crawl4AIClient:
                 return config
         return {}
 
-    def _get_browser_config(self, url: str = "", session_id: str = None, use_proxy: bool = False) -> BrowserConfig:
+    @staticmethod
+    async def _resolve_host(hostname: str) -> set[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+        """Resolve every address for a hostname so private aliases cannot bypass validation."""
+        try:
+            # DNS resolution also canonicalizes legacy numeric forms such as
+            # 0x7f000001 and 127.1 that ipaddress.ip_address() rejects.
+            hostname = hostname.encode("idna").decode("ascii")
+            addresses = await asyncio.get_running_loop().getaddrinfo(
+                hostname, None, type=socket.SOCK_STREAM
+            )
+        except (UnicodeError, socket.gaierror) as exc:
+            raise ValueError("URL hostname could not be resolved") from exc
+
+        return {ipaddress.ip_address(address[4][0]) for address in addresses}
+
+    @classmethod
+    async def _validate_crawl_url(cls, url: str) -> None:
+        """Reject unsafe URLs before they can create a remote Crawl4AI request."""
+        parsed = urlparse(url)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            raise ValueError("URL must be an absolute http:// or https:// URL")
+
+        try:
+            port = parsed.port
+        except ValueError:
+            raise ValueError("URL contains an invalid port") from None
+
+        if port == 0:
+            raise ValueError("URL port must be between 1 and 65535")
+
+        addresses = await cls._resolve_host(parsed.hostname)
+        if not addresses or any(not address.is_global for address in addresses):
+            raise ValueError("URL must not target a private or reserved IP address")
+
+    def _get_browser_config(self, url: str = "", session_id: str = None) -> BrowserConfig:
         """Helper to create a BrowserConfig from merged configs."""
         domain_config = self._get_domain_config(url)
         merged_config = self._deep_merge(DEFAULT_CONFIG, domain_config)
@@ -71,28 +108,18 @@ class Crawl4AIClient:
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/121.0.0.0 Safari/537.36",
         ])
 
-        proxy_config = None
-        if use_proxy:
-            proxy_url = os.getenv("RES_PROXY")
-            if proxy_url:
-                proxy_config = ProxyConfig.from_string(proxy_url)
-
-        user_data_dir_val = f"/app/user_data/{session_id}" if session_id else None
-        use_persistent_context_val = True if session_id else False
-
-        return BrowserConfig(
+        config = BrowserConfig(
             headless=browser_settings.get("headless", True),
             enable_stealth=browser_settings.get("stealth", True),
             viewport_width=actual_viewport_width,
             viewport_height=actual_viewport_height,
-            # user_data_dir=user_data_dir_val,
-            # use_persistent_context=use_persistent_context_val,
             user_agent=actual_user_agent,
-            extra_args=browser_settings.get("args", []),
-            browser_type=browser_settings.get("browser_settings", "chromium"),
             text_mode=browser_settings.get("text_mode"),
-            proxy_config=proxy_config,
         )
+        # BrowserConfig derives client-hint headers from the user agent. The
+        # Docker API treats every request header as server-owned policy.
+        config.headers = {}
+        return config
 
     def _get_run_config(self, url: str = "", session_id: str = None) -> CrawlerRunConfig:
         """Helper to create a CrawlerRunConfig from merged configs."""
@@ -110,23 +137,23 @@ class Crawl4AIClient:
 
         config = CrawlerRunConfig(
             delay_before_return_html=actual_delay,
-            simulate_user=crawl_settings.get("simulate_user", False),
             locale=crawl_settings.get("locale"),
             timezone_id=crawl_settings.get("timezone_id"),
             markdown_generator=md_generator,
             only_text=True,
-            magic=True,
         )
 
-        if session_id:
-            config.session_id = session_id
         return config
 
-    async def crawl_single_url(self, url: str, proxy: bool = False, session_id: str = None):
+    async def crawl_single_url(self, url: str, session_id: str = None):
         """Perform a single crawl operation."""
         async with self.semaphore:
             try:
-                browser_config = self._get_browser_config(url, session_id, proxy)
+                # Crawl4AI 0.9.3 records monitor activity before rejecting an
+                # unsafe URL. Validate here so bad input never creates a stale
+                # remote request record.
+                await self._validate_crawl_url(url)
+                browser_config = self._get_browser_config(url, session_id)
                 crawler_config = self._get_run_config(url, session_id)
 
                 return await asyncio.wait_for(
@@ -147,8 +174,8 @@ class Crawl4AIClient:
         try:
             response = await self.client._request("GET", f"/monitor/requests?status={status}")
             data = response.json()
-            # Assuming the server returns a list of requests directly or in a 'data' field
-            requests = data if isinstance(data, list) else data.get("data", [])
+            # Crawl4AI 0.9.3 returns {"active": [...], "completed": [...]}.
+            requests = data if isinstance(data, list) else data.get(status, data.get("data", []))
             return [RequestStatus(**r) for r in requests]
         except Exception as e:
             print(f"Error listing active requests: {e}")

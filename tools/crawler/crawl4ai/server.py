@@ -6,7 +6,7 @@ functionality using the crawl4ai library.
 """
 
 import asyncio
-import uuid
+import os
 from contextlib import asynccontextmanager
 from typing import List, Optional
 
@@ -30,7 +30,7 @@ def is_success(result) -> bool:
 
 def get_error(result, default: str = "Unknown error") -> str:
     """Extract error message from a crawl result."""
-    return getattr(result, 'error', default)
+    return getattr(result, 'error', None) or getattr(result, 'error_message', None) or default
 
 
 def get_markdown_content(result) -> str:
@@ -49,9 +49,12 @@ def get_html_content(result) -> str:
 @asynccontextmanager
 async def lifespan(app: FastMCP):
     print("LIFESPAN STARTING")
+    api_token = os.getenv("CRAWL4AI_API_TOKEN")
+    if not api_token:
+        raise RuntimeError("CRAWL4AI_API_TOKEN must be set to connect to Crawl4AI")
     async with Crawl4aiDockerClient(base_url=CRAWL4AI_SERVER_URL) as client:
         print("CLIENT READY:", client)
-        crawler = Crawl4AIClient(client)
+        crawler = Crawl4AIClient(client, api_token=api_token)
         
         # Start background cleanup task
         bg_task = asyncio.create_task(run_cleanup_loop(crawler))
@@ -82,14 +85,14 @@ async def crawl_url(ctx: Context, url: str, extract_markdown: bool = True, sessi
     Args:
         url: The URL to crawl.
         extract_markdown: Whether to return the content as markdown. Defaults to True.
-        session_id: if you want to reuse the same browser between multiple requests
+        session_id: retained for API compatibility; remote Crawl4AI requests do not support session reuse.
     """
     print("CTX ATTRS:", dir(ctx))
     print("LIFESPAN:", getattr(ctx, 'lifespan_context', 'NOT FOUND'))
     print("STATE:", getattr(ctx, 'state', 'NOT FOUND'))
 
     client = ctx.lifespan_context["crawler"]
-    result = await client.crawl_single_url(url, False, session_id)
+    result = await client.crawl_single_url(url, session_id=session_id)
 
     if not is_success(result):
         error_msg = get_error(result)
@@ -121,27 +124,20 @@ async def crawl_multiple_urls(ctx: Context, urls: list[str], session_id: str = N
     Args:
         ctx: The MCP context.
         urls: A list of URLs to crawl.
-        session_id: if you want to reuse the same browser between multiple requests
+        session_id: retained for API compatibility; remote Crawl4AI requests do not support session reuse.
     """
     crawler = ctx.lifespan_context["crawler"]
 
-    # Initialize a pool of 5 session IDs
-    session_pool = asyncio.Queue()
-    for _ in range(5):
-        session_pool.put_nowait(str(uuid.uuid4()))
+    # Limit fan-out independently of the client-wide concurrency cap.
+    request_semaphore = asyncio.Semaphore(5)
 
-    async def crawl_with_session(url: str):
-        # Acquire a session ID from the pool
-        sid = await session_pool.get()
-        try:
-            result = await crawler.crawl_single_url(url, False, sid)
+    async def crawl_with_limit(url: str):
+        async with request_semaphore:
+            result = await crawler.crawl_single_url(url)
             return url, result
-        finally:
-            # Return the session ID to the pool
-            session_pool.put_nowait(sid)
 
-    # Process all URLs using the pool
-    tasks = [crawl_with_session(url) for url in urls]
+    # Process all URLs with bounded concurrency.
+    tasks = [crawl_with_limit(url) for url in urls]
     all_results = await asyncio.gather(*tasks)
 
     crawl_results = []
@@ -177,8 +173,8 @@ if __name__ == "__main__":
 
         try:
             async with Crawl4aiDockerClient(base_url=CRAWL4AI_SERVER_URL) as client:
-                crawler = Crawl4AIClient(client)
-                result = await crawler.crawl_single_url(test_url, False, session_id="aaaa")
+                crawler = Crawl4AIClient(client, api_token=os.environ["CRAWL4AI_API_TOKEN"])
+                result = await crawler.crawl_single_url(test_url, session_id="aaaa")
 
                 if is_success(result):
                     print("SUCCESS!")
