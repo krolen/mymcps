@@ -23,8 +23,10 @@ async def run_cleanup_loop(crawler: Crawl4AIClient):
                 for browser in browsers:
                     if browser.killable and browser.last_used_seconds > 30:
                         logger.info(f"Killing idle browser: {browser.sig} (last used {browser.last_used_seconds}s ago)")
-                        await crawler.kill_browser(browser.sig)
-                        killed_count += 1
+                        if await crawler.kill_browser(browser.sig):
+                            killed_count += 1
+                        else:
+                            logger.warning("Could not kill idle browser: %s", browser.sig)
                 
                 if killed_count > 0:
                     logger.info(f"Successfully killed {killed_count} idle browsers.")

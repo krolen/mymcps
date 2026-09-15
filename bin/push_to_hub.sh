@@ -21,12 +21,12 @@ echo "🚀 Starting build for ${IMAGE_NAME}:${UNIQUE_TAG}..."
 # We explicitly set the build context to the PROJECT_ROOT so that
 # Docker can find the Dockerfile and pyproject.toml
 echo "📦 Building Docker image from ${PROJECT_ROOT}..."
-docker build -t ${IMAGE_NAME}:${UNIQUE_TAG} "${PROJECT_ROOT}"
-docker tag ${IMAGE_NAME}:${UNIQUE_TAG} ${IMAGE_NAME}:${LATEST_TAG}
+docker build -t ${IMAGE_NAME}:"${UNIQUE_TAG}" "${PROJECT_ROOT}"
+docker tag ${IMAGE_NAME}:"${UNIQUE_TAG}" ${IMAGE_NAME}:${LATEST_TAG}
 
 # 2. Push the image to Docker Hub
 echo "📤 Pushing image to Docker Hub..."
-docker push ${IMAGE_NAME}:${UNIQUE_TAG}
+docker push ${IMAGE_NAME}:"${UNIQUE_TAG}"
 docker push ${IMAGE_NAME}:${LATEST_TAG}
 
-echo "✅ Successfully pushed ${IMAGE_NAME}:${TAG} to Docker Hub!"
+echo "✅ Successfully pushed ${IMAGE_NAME}:${UNIQUE_TAG} to Docker Hub!"

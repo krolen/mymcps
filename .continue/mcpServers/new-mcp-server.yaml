@@ -1,7 +1,0 @@
-name: My MCP server
-version: 0.0.2
-schema: v1
-mcpServers:
-  - name: My MCP server
-    type: streamable-http
-    url: http://192.168.0.188:7000/mcp

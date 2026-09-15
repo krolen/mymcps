@@ -1,4 +1,5 @@
 import asyncio
+import os
 import pytest
 from tools.crawler.crawl4ai.client import Crawl4AIClient
 from crawl4ai.docker_client import Crawl4aiDockerClient
@@ -9,10 +10,14 @@ async def test_kill_browser_integration():
     """
     Integration test to verify browser killing functionality on the real server.
     """
+    api_token = os.getenv("CRAWL4AI_API_TOKEN")
+    if not api_token:
+        pytest.skip("CRAWL4AI_API_TOKEN is required for Crawl4AI integration tests")
+
     print(f"Connecting to crawl server at {CRAWL4AI_SERVER_URL}...")
     
     async with Crawl4aiDockerClient(base_url=CRAWL4AI_SERVER_URL) as docker_client:
-        crawler = Crawl4AIClient(docker_client)
+        crawler = Crawl4AIClient(docker_client, api_token=api_token)
         
         # 1. Trigger a crawl to ensure a browser is created
         print("Triggering crawl to create a browser session...")
