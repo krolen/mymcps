@@ -10,7 +10,6 @@ from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 from tools.crawler.crawl4ai.server import lifespan as crawl_lifespan
 from tools.common.http_client import close_client
-from tools.common.http_client import close_client
 
 os.environ["DANGEROUSLY_OMIT_AUTH"] = "true"
 
@@ -73,5 +72,5 @@ app = mcp.http_app(middleware=middleware, transport="streamable-http")
 # Run the server
 if __name__ == "__main__":
     import uvicorn
-    print("Starting FastMCP v3 server with CORS at /mcp")
+    print("Starting FastMCP v4 server with CORS at /mcp")
     uvicorn.run("server:app", host="0.0.0.0", port=7000, reload=True)

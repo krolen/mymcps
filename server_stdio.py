@@ -3,7 +3,7 @@ import os
 from fastmcp import FastMCP
 from tools.common.http_client import close_client
 
-from tools.utils.time import mcp as time_mcp
+from tools.utils.time.server import mcp as time_mcp
 import logging
 from fastmcp.utilities.logging import get_logger
 

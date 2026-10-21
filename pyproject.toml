@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "MCP Servers collection including SearXNG search"
 requires-python = ">=3.12"
 dependencies = [
-    "fastmcp==3.2.4",
+    "fastmcp==4.1.2",
     "httpx==0.28.1",
     "requests==2.33.1",
     "crawl4ai==0.9.3",
