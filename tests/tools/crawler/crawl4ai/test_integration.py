@@ -4,6 +4,7 @@ import pytest
 from crawl4ai.docker_client import Crawl4aiDockerClient
 from tools.crawler.crawl4ai.client import Crawl4AIClient
 from tools.crawler.constants import CRAWL4AI_SERVER_URL
+from tools.search.constants import SearchConstants
 
 @pytest.mark.asyncio
 async def test_crawl_single_url_integration():
@@ -14,7 +15,7 @@ async def test_crawl_single_url_integration():
     if not api_token:
         pytest.skip("CRAWL4AI_API_TOKEN is required for Crawl4AI integration tests")
 
-    url = "https://searx.tiekoetter.com/search?q=ai+news+%21google&category_none=1&pageno=3&language=en-US&time_range=&safesearch=0&theme=simple"
+    url = f"{SearchConstants.SEARXNG_URL.rstrip('/')}/search?q=ai+news"
 
     try:
         async with Crawl4aiDockerClient(base_url=CRAWL4AI_SERVER_URL) as docker_client:
@@ -24,7 +25,7 @@ async def test_crawl_single_url_integration():
             result = await crawler.crawl_single_url(url)
 
             assert result is not None
-            assert result.success is True
+            assert result.success is True, getattr(result, 'error', None) or getattr(result, 'error_message', '')
             # Check if we actually got content
             assert hasattr(result, 'markdown')
             assert len(str(result.markdown)) > 0

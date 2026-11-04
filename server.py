@@ -10,6 +10,7 @@ from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 from tools.crawler.crawl4ai.server import lifespan as crawl_lifespan
 from tools.common.http_client import close_client
+from tools.common.optional_mcp import OptionalMCPProvider
 
 os.environ["DANGEROUSLY_OMIT_AUTH"] = "true"
 
@@ -50,6 +51,23 @@ async def lifespan(app: FastMCP):
 
 mcp = FastMCP(name="my-server", lifespan=lifespan)
 mcp.add_provider(FileSystemProvider("./tools", reload=True))
+
+chrome_bridge_url = os.getenv("CHROME_BRIDGE_URL")
+if chrome_bridge_url:
+    chrome_bridge_token = os.getenv("CHROME_BRIDGE_TOKEN")
+    if not chrome_bridge_token:
+        raise RuntimeError("CHROME_BRIDGE_TOKEN is required when CHROME_BRIDGE_URL is set")
+    chrome_provider = OptionalMCPProvider(chrome_bridge_url, chrome_bridge_token)
+    mcp.add_provider(chrome_provider, namespace="chrome")
+
+    @mcp.tool()
+    async def browser_bridge_status() -> dict[str, float | bool]:
+        """Check the optional Chrome bridge and report when it will retry."""
+        await chrome_provider.probe()
+        return {
+            "available": chrome_provider.available,
+            "retry_after_seconds": round(chrome_provider.retry_after, 1),
+        }
 
 # Configure CORS for browser-based clients
 middleware = [

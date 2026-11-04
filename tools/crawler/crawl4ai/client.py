@@ -17,6 +17,7 @@ from tools.crawler.constants import (
     DEFAULT_CONFIG, DOMAIN_CONFIGS, CRAWL_TIMEOUT_SECONDS, CRAWL_HTTP_TIMEOUT_SECONDS,
     BROWSER_VIEWPORTS, BROWSER_USER_AGENTS,
 )
+from tools.search.constants import SearchConstants
 
 
 logger = logging.getLogger(__name__)
@@ -94,6 +95,21 @@ class Crawl4AIClient:
 
         if port == 0:
             raise ValueError("URL port must be between 1 and 65535")
+
+        # Trust only the configured SearXNG origin, including its scheme and
+        # port, so the local search service can be crawled without permitting
+        # arbitrary LAN targets.
+        local_search = urlparse(SearchConstants.SEARXNG_URL)
+        default_ports = {"http": 80, "https": 443}
+        if (
+            parsed.username is None
+            and parsed.password is None
+            and parsed.scheme == local_search.scheme
+            and parsed.hostname == local_search.hostname
+            and (port or default_ports[parsed.scheme])
+            == (local_search.port or default_ports.get(local_search.scheme))
+        ):
+            return
 
         addresses = await cls._resolve_host(parsed.hostname)
         if not addresses or any(not address.is_global for address in addresses):

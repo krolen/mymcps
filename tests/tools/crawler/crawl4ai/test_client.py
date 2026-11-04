@@ -140,6 +140,38 @@ async def test_list_active_requests_reads_crawl4ai_093_response():
     assert [request.id for request in requests] == ["req-1"]
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("url, allowed", [
+    ("http://192.168.0.100:8089/search?q=test", True),
+    ("http://192.168.0.100:8088/search?q=test", False),
+    ("https://192.168.0.100:8089/search?q=test", False),
+    ("http://192.168.0.101:8089/search?q=test", False),
+    ("http://192.168.0.100:8089.evil.example/search", False),
+    ("http://192.168.0.100:8089@evil.example/search", False),
+    ("http://user:password@192.168.0.100:8089/search", False),
+])
+async def test_only_configured_local_search_origin_is_allowed(monkeypatch, url, allowed):
+    monkeypatch.setattr(
+        "tools.crawler.crawl4ai.client.SearchConstants.SEARXNG_URL",
+        "http://192.168.0.100:8089",
+    )
+
+    async def resolve(_hostname):
+        return {ipaddress.ip_address("192.168.0.100")}
+
+    monkeypatch.setattr(Crawl4AIClient, "_resolve_host", resolve)
+    docker_client = AsyncMock()
+    docker_client.crawl.return_value = MagicMock(success=True)
+    result = await Crawl4AIClient(docker_client).crawl_single_url(url)
+
+    if allowed:
+        assert result.success is True
+        docker_client.crawl.assert_awaited_once()
+    else:
+        assert isinstance(result, ErrorResult)
+        docker_client.crawl.assert_not_called()
+
+
 def test_config_factories_only_send_docker_api_supported_fields(monkeypatch):
     """The 0.9 Docker API rejects client-controlled browser/stealth policy."""
     browser_factory = MagicMock(return_value=MagicMock())
