@@ -1,40 +1,43 @@
 import asyncio
 import logging
+
+from tools.crawler.constants import (
+    BROWSER_CLEANUP_INTERVAL_SECONDS,
+    BROWSER_IDLE_TIMEOUT_SECONDS,
+)
 from tools.crawler.crawl4ai.client import Crawl4AIClient
 
 logger = logging.getLogger("crawl4ai-cleanup")
 
+
 async def run_cleanup_loop(crawler: Crawl4AIClient):
+    """Clean up idle browsers when the remote janitor misses them.
+
+    Allow warm browsers to be reused before evicting eligible idle instances.
     """
-    Background task to monitor and cleanup hanging browsers/requests.
-    """
-    logger.info("Cleanup background task started.")
+    logger.info("Crawler cleanup background task started.")
     try:
         while True:
-            # Periodic monitoring and cleanup logic
             try:
                 active_requests = await crawler.list_active_requests(status="active")
                 browsers = await crawler.list_browsers()
-                
-                logger.info(f"Monitor: {len(active_requests)} active requests, {len(browsers)} active browsers.")
-                
-                # Cleanup killable browsers that haven't been used for > 30 seconds
-                killed_count = 0
+                logger.info(
+                    "Monitor: %s active requests, %s active browsers.",
+                    len(active_requests), len(browsers),
+                )
+
                 for browser in browsers:
-                    if browser.killable and browser.last_used_seconds > 30:
-                        logger.info(f"Killing idle browser: {browser.sig} (last used {browser.last_used_seconds}s ago)")
-                        if await crawler.kill_browser(browser.sig):
-                            killed_count += 1
-                        else:
-                            logger.warning("Could not kill idle browser: %s", browser.sig)
-                
-                if killed_count > 0:
-                    logger.info(f"Successfully killed {killed_count} idle browsers.")
-                
-            except Exception as e:
-                logger.error(f"Error during cleanup cycle: {e}")
-                
-            # Run every 30 seconds
-            await asyncio.sleep(30)
+                    if not browser.killable or browser.last_used_seconds <= BROWSER_IDLE_TIMEOUT_SECONDS:
+                        continue
+                    logger.info(
+                        "Killing idle browser: %s (last used %ss ago)",
+                        browser.sig, browser.last_used_seconds,
+                    )
+                    if not await crawler.kill_browser(browser.sig):
+                        logger.warning("Could not kill idle browser: %s", browser.sig)
+            except Exception:
+                logger.exception("Error during cleanup cycle")
+
+            await asyncio.sleep(BROWSER_CLEANUP_INTERVAL_SECONDS)
     except asyncio.CancelledError:
-        logger.info("Cleanup background task shutting down...")
+        logger.info("Crawler cleanup background task shutting down...")

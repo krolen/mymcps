@@ -43,6 +43,9 @@ async def close_client():
     Closes the shared HTTP clients.
     Should be called during server shutdown.
     """
+    from tools.search.modules.searx_space.browser_client import close_browser_session
+
+    await close_browser_session()
     global _client, _proxy_client
     if _client is not None:
         await _client.aclose()

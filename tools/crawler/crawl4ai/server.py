@@ -14,12 +14,10 @@ from crawl4ai.docker_client import Crawl4aiDockerClient
 from fastmcp import FastMCP, Context
 
 from tools.common.health_logger import health_logger
-from tools.crawler.constants import CRAWL4AI_SERVER_URL
+from tools.crawler.constants import CRAWL4AI_SERVER_URL, CRAWL_HTTP_TIMEOUT_SECONDS
 from tools.crawler.crawl4ai.client import Crawl4AIClient
 from tools.crawler.crawl4ai.cleanup import run_cleanup_loop
 from tools.crawler.models import CrawlResult, CrawlResponse
-
-CRAWL_SEMAPHORE = asyncio.Semaphore(10)
 
 
 # Result utility functions
@@ -52,11 +50,11 @@ async def lifespan(app: FastMCP):
     api_token = os.getenv("CRAWL4AI_API_TOKEN")
     if not api_token:
         raise RuntimeError("CRAWL4AI_API_TOKEN must be set to connect to Crawl4AI")
-    async with Crawl4aiDockerClient(base_url=CRAWL4AI_SERVER_URL) as client:
+    async with Crawl4aiDockerClient(base_url=CRAWL4AI_SERVER_URL, timeout=CRAWL_HTTP_TIMEOUT_SECONDS) as client:
         print("CLIENT READY:", client)
         crawler = Crawl4AIClient(client, api_token=api_token)
         
-        # Start background cleanup task
+        # Keep local cleanup as a fallback when the remote janitor misses browsers.
         bg_task = asyncio.create_task(run_cleanup_loop(crawler))
         try:
             yield {"crawler": crawler}
@@ -172,7 +170,7 @@ if __name__ == "__main__":
         print(f"Testing crawl_url tool: {test_url}")
 
         try:
-            async with Crawl4aiDockerClient(base_url=CRAWL4AI_SERVER_URL) as client:
+            async with Crawl4aiDockerClient(base_url=CRAWL4AI_SERVER_URL, timeout=CRAWL_HTTP_TIMEOUT_SECONDS) as client:
                 crawler = Crawl4AIClient(client, api_token=os.environ["CRAWL4AI_API_TOKEN"])
                 result = await crawler.crawl_single_url(test_url, session_id="aaaa")
 

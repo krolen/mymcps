@@ -34,4 +34,7 @@ This repository is a collection of MCP (Model Context Protocol) servers built us
 - **Modular Tooling**: Tools are decoupled from the main server logic and stored in the `tools/` directory.
 - **Dynamic Discovery**: `server.py` uses a `FileSystemProvider` to provide access to the `tools/` directory.
 - **Hybrid Search**: The search implementation allows for mixing results from SearXNG and custom modules like DuckDuckGo.
+- **Local Crawl4AI Cleanup Fallback**: The remote Crawl4AI cleaner sometimes fails to clean up browsers. This is why the local server's browser cleanup task was introduced. Preserve this fallback requirement when optimizing browser reuse; relying exclusively on the remote cleaner does not address the observed operational failures. See `tools/crawler/crawl4ai/README.md` for current behavior.
+- **Intentional Viewport Rotation**: Viewport switching is a deliberate project feature because fixed viewports have resulted in bans. Preserve rotation when optimizing Crawl4AI browser reuse. Use a bounded set of viewport profiles so matching configurations can still reuse browsers.
 
+- **Intentional User-Agent Variation**: Preserve random selection between Windows and Linux Chrome user agents alongside viewport rotation. Keep versions current and the profile set bounded so matching configurations can reuse browsers.

@@ -59,3 +59,30 @@ async def test_kill_browser_integration():
 if __name__ == "__main__":
     # Allow running the test directly via python
     asyncio.run(test_kill_browser_integration())
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kill_succeeds", [True, False])
+async def test_local_cleanup_preserves_warm_browsers_and_evicts_stale_ones(monkeypatch, kill_succeeds):
+    from unittest.mock import AsyncMock, MagicMock, call
+    from tools.crawler.constants import BROWSER_CLEANUP_INTERVAL_SECONDS, BROWSER_IDLE_TIMEOUT_SECONDS
+    from tools.crawler.crawl4ai.cleanup import run_cleanup_loop
+
+    crawler = AsyncMock()
+    crawler.list_active_requests.return_value = []
+    crawler.list_browsers.return_value = [
+        MagicMock(killable=True, last_used_seconds=31, sig="warm"),
+        MagicMock(killable=True, last_used_seconds=BROWSER_IDLE_TIMEOUT_SECONDS, sig="at-threshold"),
+        MagicMock(killable=False, last_used_seconds=3600, sig="protected"),
+        MagicMock(killable=True, last_used_seconds=BROWSER_IDLE_TIMEOUT_SECONDS + 1, sig="stale"),
+        MagicMock(killable=True, last_used_seconds=3600, sig="also-stale"),
+    ]
+    crawler.kill_browser.return_value = kill_succeeds
+    # Stop after one cycle, including when a kill reports failure.
+    sleep = AsyncMock(side_effect=asyncio.CancelledError)
+    monkeypatch.setattr("tools.crawler.crawl4ai.cleanup.asyncio.sleep", sleep)
+    await run_cleanup_loop(crawler)
+    crawler.list_active_requests.assert_awaited_once()
+    crawler.list_browsers.assert_awaited_once()
+    assert crawler.kill_browser.await_args_list == [call("stale"), call("also-stale")]
+    sleep.assert_awaited_once_with(BROWSER_CLEANUP_INTERVAL_SECONDS)
