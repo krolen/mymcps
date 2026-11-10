@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, AliasChoices
 from typing import Optional, List, Any
 
 
@@ -16,9 +16,10 @@ class CrawlResponse(BaseModel):
 class RequestStatus(BaseModel):
     id: str
     url: str
-    status: str
-    start_time: Optional[str] = None
-    duration: Optional[float] = None
+    status: str = "active"
+    start_time: float | str | None = None
+    duration: Optional[float] = Field(default=None, validation_alias=AliasChoices("duration", "elapsed"))
+    config_sig: Optional[str] = None
 
 
 class BrowserStatus(BaseModel):

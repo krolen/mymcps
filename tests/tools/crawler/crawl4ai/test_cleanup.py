@@ -86,3 +86,28 @@ async def test_local_cleanup_preserves_warm_browsers_and_evicts_stale_ones(monke
     crawler.list_browsers.assert_awaited_once()
     assert crawler.kill_browser.await_args_list == [call("stale"), call("also-stale")]
     sleep.assert_awaited_once_with(BROWSER_CLEANUP_INTERVAL_SECONDS)
+
+
+@pytest.mark.asyncio
+async def test_overdue_request_kills_matching_warm_browser(monkeypatch):
+    from unittest.mock import AsyncMock, MagicMock
+    from tools.crawler.models import RequestStatus
+    from tools.crawler.crawl4ai.cleanup import run_cleanup_loop
+
+    crawler = AsyncMock()
+    # Actual monitor shape: epoch timestamp, elapsed, no status.
+    crawler.list_active_requests.return_value = [
+        RequestStatus(id="hung", url="https://example.com",
+                      start_time=1700000000.0, elapsed=70000,
+                      config_sig="abcdef012345"),
+        RequestStatus(id="fresh", url="https://example.org",
+                      elapsed=10, config_sig="fresh"),
+    ]
+    crawler.list_browsers.return_value = [
+        MagicMock(sig="abcdef01", killable=True, last_used_seconds=0),
+        MagicMock(sig="fresh", killable=True, last_used_seconds=0),
+    ]
+    monkeypatch.setattr("tools.crawler.crawl4ai.cleanup.asyncio.sleep",
+                        AsyncMock(side_effect=asyncio.CancelledError))
+    await run_cleanup_loop(crawler)
+    crawler.kill_browser.assert_awaited_once_with("abcdef01")
