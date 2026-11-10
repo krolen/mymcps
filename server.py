@@ -49,7 +49,18 @@ async def lifespan(app: FastMCP):
         finally:
             await close_client()
 
-mcp = FastMCP(name="my-server", lifespan=lifespan)
+mcp = FastMCP(
+    name="my-server",
+    lifespan=lifespan,
+    instructions="""\
+Tools are grouped by prefix: web_* (SearXNG search and Crawl4AI crawling), utils_* (general utilities), and chrome_* (desktop Chrome DevTools browser automation, proxied through the optional Chrome bridge).
+
+chrome_* tool usage:
+- Get open page IDs with chrome_list_pages and select a page with chrome_select_page; other chrome_* tools target a page via its pageId.
+- Before interacting with page elements, call chrome_take_snapshot and use the element uids it returns (chrome_click, chrome_fill, chrome_hover, chrome_drag, chrome_take_screenshot by element).
+- The Chrome bridge is optional. If chrome_* calls fail to connect, call chrome_bridge_status to see whether the bridge is available and when it will retry.
+""",
+)
 mcp.add_provider(FileSystemProvider("./tools", reload=True))
 
 chrome_bridge_url = os.getenv("CHROME_BRIDGE_URL")
@@ -61,8 +72,12 @@ if chrome_bridge_url:
     mcp.add_provider(chrome_provider, namespace="chrome")
 
     @mcp.tool()
-    async def browser_bridge_status() -> dict[str, float | bool]:
-        """Check the optional Chrome bridge and report when it will retry."""
+    async def chrome_bridge_status() -> dict[str, float | bool]:
+        """Check whether the optional Chrome bridge is available.
+
+        Returns its availability and how many seconds until the next
+        discovery retry, while the bridge is offline.
+        """
         await chrome_provider.probe()
         return {
             "available": chrome_provider.available,

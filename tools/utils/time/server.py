@@ -21,8 +21,8 @@ def time() -> str:
 @mcp.tool(name="utils_time")
 def time() -> str:
     """
-    The current local time in ISO format.
-    Use this resource when the user asks for the current time or date.
+    Returns the current local time in ISO format.
+    Use this instead of assuming the current time from context.
     """
-    logging.info("time resource accessed")
+    logging.info("time tool accessed")
     return datetime.now().isoformat()
