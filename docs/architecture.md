@@ -12,7 +12,7 @@ MCP client -> server.py: /mcp, Streamable HTTP
         -> local SearXNG, then public instances
      -> crawl server -> lifespan crawler -> remote Crawl4AI
      -> time tool/resource
-  -> optional chrome namespace -> remote authenticated MCP bridge
+  -> mounted tools/browser-mcp/server.py -> optional chrome namespace -> remote authenticated MCP bridge
 
 server_stdio.py -> mounted time server only
 ```
@@ -91,6 +91,8 @@ Timeouts become failure results; wrapped SDK HTTP timeouts are identified throug
 Cleanup polls `/monitor/requests?status=active` and `/monitor/browsers` every 30 seconds. It kills eligible browsers through `/monitor/actions/kill_browser` when idle more than 300 seconds, or when their signature matches an active request exceeding 60 seconds. Signature matching accepts either prefix direction. Protected (`killable=false`) browsers are never killed. Monitor failures return empty lists and log errors. The server also needs its own resource limits: client cancellation does not guarantee remote work stops. See the crawler README for deployment tuning.
 
 ## Optional Chrome bridge
+
+`tools/browser-mcp/server.py` owns configuration, namespacing, instructions, and the status tool. The entry point explicitly mounts its module-level `mcp`: filesystem discovery extracts decorated functions but does not compose nested providers. The status function is scoped inside a factory so it is registered only through the mount. An unset URL yields an empty server; a configured URL without a token raises at startup.
 
 `OptionalMCPProvider` exposes tools only. Discovery has a three-second timeout, a 15-second failure cooldown, and a lock preventing duplicate probes during recovery. Failed discovery returns an empty list or missing tool instead of stopping local discovery. Tool operations use transport timeouts of two seconds connect/pool, ten seconds write, and 300 seconds read. These are distinct from the discovery timeout. `chrome_bridge_status` probes subject to cooldown; it is not an unconditional reconnect. Remote background tasks are disabled.
 
